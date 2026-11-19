@@ -2,6 +2,8 @@
 
 **A memory store for coding agents where a memory is trusted only while its Kane CLI flow passes.**
 
+**Live demo (read-only): https://morrel.vercel.app**: the board with the real example.com Kane runs and their step screenshots, plus seeded `MOCK` data.
+
 Agents accumulate beliefs about the app they work on — *"login redirects to /dashboard"*, *"SAVE10 takes 10% off"*.
 Those beliefs rot silently as code changes. In Morrel, every memory is a **claim** linked to a
 **[Kane CLI](https://www.testmuai.com/support/docs/kane-cli-introduction/) flow** that proves it in a real browser.
@@ -33,6 +35,16 @@ What happened, start to finish:
 | ![Detail](docs/screenshots/detail-failed.png) | ![Runs](docs/screenshots/runs.png) |
 
 > These screenshots use `pnpm seed` demo data. **Every run in them comes from the mock runner** (labelled `MOCK`), so no memory shows as *Trusted*: the gate never trusts mock passes.
+
+### Public demo (Vercel)
+
+https://morrel.vercel.app is the board running with `MORREL_DEMO=1`. It reads a bundled JSON export instead of SQLite, so nothing can be verified there. Run `morrel` locally for that.
+
+- `node scripts/export-demo.mjs` merges the mock seed DB and the real-run DB into `packages/web/demo/demo.json` and copies the real Kane step screenshots to `packages/web/public/demo-artifacts/`. It replaces paths and project ids with placeholders, withholds Test Manager links, and fails if a credential value appears in the output.
+- Mock runs stay labelled `MOCK` and are never trusted. Only `example-heading` is trusted, because a real Kane run passed it.
+- Vercel project settings: root `packages/web`, Node 24.x (for `node:sqlite`). The build in `packages/web/vercel.json` runs `pnpm --filter @morrel/core run build && next build`.
+
+![Live demo detail](docs/screenshots/demo-detail-trusted.png)
 
 ## Architecture
 

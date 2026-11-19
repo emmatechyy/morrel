@@ -1,0 +1,7 @@
+.morrel
+**/node_modules
+**/dist
+**/.next
+docs
+.testmuai
+.env*

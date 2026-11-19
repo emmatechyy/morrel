@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { isMockEnv, type RunResult } from "@morrel/core";
-import { dbPath, withStore } from "@/lib/store";
+import { dbPath, isDemo, withStore } from "@/lib/store";
 import { duration, splitRemark } from "@/lib/format";
 import { AutoRefresh, Shortcuts } from "@/components/client";
 import { Page, TopBar } from "@/components/shell";
@@ -26,11 +26,11 @@ export default async function RunsPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <TopBar active="runs" dbPath={dbPath()} mock={isMockEnv()} />
+      <TopBar active="runs" dbPath={dbPath()} mock={isMockEnv()} demo={isDemo()} />
       <Suspense>
         <Shortcuts />
       </Suspense>
-      <AutoRefresh seconds={5} />
+      {!isDemo() && <AutoRefresh seconds={5} />}
       <Page>
         <section className="flex items-end justify-between gap-6 pb-5 pt-8">
           <div>

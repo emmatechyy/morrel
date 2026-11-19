@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { MEMORY_STATUSES, isMockEnv, type MemoryStatus } from "@morrel/core";
-import { dbPath, withStore } from "@/lib/store";
+import { dbPath, isDemo, withStore } from "@/lib/store";
 import { AutoRefresh, SearchBox, Shortcuts } from "@/components/client";
 import { Page, TopBar } from "@/components/shell";
 import { MockTag, ResultMark, StatusBadge, TrustMark } from "@/components/status";
@@ -37,11 +37,11 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
 
   return (
     <>
-      <TopBar active="memories" dbPath={dbPath()} mock={isMockEnv()} />
+      <TopBar active="memories" dbPath={dbPath()} mock={isMockEnv()} demo={isDemo()} />
       <Suspense>
         <Shortcuts filters={FILTERS} />
       </Suspense>
-      <AutoRefresh seconds={5} />
+      {!isDemo() && <AutoRefresh seconds={5} />}
       <Page>
         {/* Header */}
         <section className="flex items-end justify-between gap-6 pb-5 pt-8">

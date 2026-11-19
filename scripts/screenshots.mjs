@@ -52,4 +52,12 @@ if (process.env.REAL_URL) {
     console.log(`${out}${name}.png`);
   }
 }
+if (process.env.DEMO_URL) {
+  for (const [name, path, full] of [["demo-board", "/", false], ["demo-detail-trusted", "/memories/example-heading", true]]) {
+    await page.goto(process.env.DEMO_URL + path, { waitUntil: "networkidle" });
+    await page.addStyleTag({ content: "header{position:relative!important}" });
+    await page.screenshot({ path: `${out}${name}.png`, fullPage: full });
+    console.log(`${out}${name}.png`);
+  }
+}
 await browser.close();

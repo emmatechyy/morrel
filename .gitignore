@@ -7,3 +7,5 @@ dist/
 .env.*
 .testmuai/
 packages/web/next-env.d.ts
+.vercel
+.env*

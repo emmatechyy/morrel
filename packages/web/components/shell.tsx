@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Kbd } from "./ui";
 
-export function TopBar({ active, dbPath, mock }: { active: "memories" | "runs"; dbPath: string; mock: boolean }) {
+export function TopBar({ active, dbPath, mock, demo = false }: { active: "memories" | "runs"; dbPath: string; mock: boolean; demo?: boolean }) {
   const tab = (href: string, label: string, key: string, on: boolean) => (
     <Link
       href={href}
@@ -35,9 +35,20 @@ export function TopBar({ active, dbPath, mock }: { active: "memories" | "runs"; 
               MOCK RUNNER ACTIVE
             </span>
           )}
-          <span className="hidden truncate font-mono md:inline" title={dbPath}>
-            {dbPath.replace(process.env.HOME ?? "~", "~")}
-          </span>
+          {demo ? (
+            <span className="flex items-center gap-2" title="Static snapshot: mock seed data plus real Kane CLI runs against example.com. Nothing here re-runs.">
+              <span className="size-1.5 rounded-full border border-fg-3" aria-hidden />
+              <span>Read-only demo.</span>
+              <span className="hidden text-fg-4 md:inline">
+                Run <code className="font-mono text-fg-3">morrel</code> locally to verify.
+              </span>
+              <a href="https://github.com/emmatechyy/morrel" className="font-mono text-fg-3 hover:text-fg" target="_blank" rel="noreferrer">github</a>
+            </span>
+          ) : (
+            <span className="hidden truncate font-mono md:inline" title={dbPath}>
+              {dbPath.replace(process.env.HOME ?? "~", "~")}
+            </span>
+          )}
         </div>
       </div>
     </header>

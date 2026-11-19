@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Fragment, Suspense } from "react";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isMockEnv, type MemoryEvent, type Run } from "@morrel/core";
-import { dbPath, withStore } from "@/lib/store";
+import { dbPath, demoRaw, isDemo, withStore } from "@/lib/store";
 import { duration, splitRemark } from "@/lib/format";
 import { AutoRefresh, CopyButton, Shortcuts } from "@/components/client";
 import { Page, TopBar } from "@/components/shell";
@@ -27,11 +27,11 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
 
   return (
     <>
-      <TopBar active="memories" dbPath={dbPath()} mock={isMockEnv()} />
+      <TopBar active="memories" dbPath={dbPath()} mock={isMockEnv()} demo={isDemo()} />
       <Suspense>
         <Shortcuts />
       </Suspense>
-      <AutoRefresh seconds={5} />
+      {!isDemo() && <AutoRefresh seconds={5} />}
       <Page>
         {/* Breadcrumb */}
         <div className="flex h-11 items-center gap-2 text-sm text-fg-3">
@@ -230,9 +230,11 @@ function Prop({ k, children }: { k: string; children: React.ReactNode }) {
 function Evidence({ run, currentVersion }: { run: Run; currentVersion: number }) {
   const ev = run.evidence;
   const done = ev.steps.filter((s) => s.status === "done").length;
-  const raw = readRaw(run.rawNdjsonPath);
+  const demoLines = demoRaw(run.id);
+  const raw = demoLines ? { lines: demoLines } : isDemo() ? null : readRaw(run.rawNdjsonPath);
   const links: [string, string][] = [];
   if (ev.testUrl) links.push(["Test Manager", ev.testUrl]);
+  const withheld = (ev as { testUrlWithheld?: boolean }).testUrlWithheld === true;
   if (ev.shareUrl) links.push(["Share link", ev.shareUrl]);
   if (ev.reportUrl) links.push(["Report", ev.reportUrl]);
   if (ev.videoUrl) links.push(["Video", ev.videoUrl]);
@@ -285,16 +287,18 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
                   {s.url && <span className="block truncate font-mono text-2xs leading-4 text-fg-4">{s.url}</span>}
                 </span>
                 {s.screenshot ? (
-                  <a href={`/api/artifact/${s.screenshot}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-[4px] border border-line-strong hover:border-fg-3" title="Step screenshot from the Kane evidence pack">
+                  <a href={artifactUrl(s.screenshot)} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-[4px] border border-line-strong hover:border-fg-3" title="Step screenshot from the Kane evidence pack">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/api/artifact/${s.screenshot}`} alt={`Step ${s.index} screenshot`} className="block h-[45px] w-[80px] object-cover object-top" loading="lazy" />
+                    <img src={artifactUrl(s.screenshot)} alt={`Step ${s.index} screenshot`} className="block h-[54px] w-[96px] bg-white object-cover object-[50%_38%]" loading="lazy" />
                   </a>
                 ) : <span />}
               </li>
             );
           })}
         </ol>
-      ) : (
+      ) : null}
+      {ev.steps.length > 0 && <PagePreview run={run} />}
+      {ev.steps.length === 0 && (
         <div className="px-3.5 py-4 text-sm text-fg-3">
           No steps reported.{" "}
           {run.result === "error" ? "Kane did not start the run — see the reason above and stderr below." : null}
@@ -330,6 +334,12 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
 
       {/* Artifacts */}
       <div className="space-y-2.5 border-t border-line bg-panel px-3.5 py-3 text-xs">
+        {withheld && (
+          <div className="flex items-center gap-2">
+            <span className="w-24 shrink-0 text-fg-3">Test Manager</span>
+            <span className="text-fg-4">Kane uploaded this run (link withheld in the public demo)</span>
+          </div>
+        )}
         {links.length > 0 && (
           <div className="flex flex-wrap items-center gap-4">
             {links.map(([label, href]) => (
@@ -350,7 +360,7 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
             <code className="min-w-0 flex-1 truncate font-mono text-2xs text-fg-2">{ev.sessionDir}</code>
           </div>
         )}
-        {!links.length && !ev.evidencePackPath && !ev.sessionDir && (
+        {!links.length && !withheld && !ev.evidencePackPath && !ev.sessionDir && (
           <div className="text-fg-4">
             {run.runner === "mock" ? "Mock runs produce no Test Manager link, screenshots or evidence pack." : "Kane reported no artifact links for this run."}
           </div>
@@ -405,6 +415,32 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
         </div>
       )}
     </div>
+  );
+}
+
+function artifactUrl(rel: string): string {
+  return process.env.MORREL_DEMO === "1" ? `/demo-artifacts/${rel}` : `/api/artifact/${rel}`;
+}
+
+/** Large view of the page Kane saw at the decisive step (the failed one, else the last). */
+function PagePreview({ run }: { run: Run }) {
+  const steps = run.evidence.steps.filter((s) => s.screenshot);
+  if (!steps.length) return null;
+  const step = steps.find((s) => s.status === "failed") ?? steps[steps.length - 1]!;
+  const { verb } = splitRemark(step.remark);
+  return (
+    <figure className="border-t border-line bg-[#070707] px-3.5 py-3">
+      <a href={artifactUrl(step.screenshot!)} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-[5px] border border-line-strong hover:border-fg-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={artifactUrl(step.screenshot!)} alt={`Page at step ${step.index}`} className="block aspect-[16/7] w-full bg-white object-cover object-[50%_30%]" loading="lazy" />
+      </a>
+      <figcaption className="mt-2 flex items-center gap-2 font-mono text-2xs text-fg-3">
+        <ResultMark result={step.status === "failed" ? "fail" : "pass"} />
+        <span>step {String(step.index).padStart(2, "0")} · {verb ?? "step"}</span>
+        {step.url && <span className="truncate text-fg-4">{step.url}</span>}
+        <span className="ml-auto text-fg-4">screenshot from the Kane evidence pack</span>
+      </figcaption>
+    </figure>
   );
 }
 
