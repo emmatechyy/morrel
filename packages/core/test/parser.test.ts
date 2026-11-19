@@ -77,3 +77,46 @@ describe("Kane NDJSON parser", () => {
     expect(r.reason).toBe("No start URL resolved");
   });
 });
+
+describe("real kane-cli 0.10.6 streams", () => {
+  it("parses a real failed run: numeric result_code, pack path on stdout, checks and verdict", () => {
+    const r = parseKaneOutput(fx("real-fail-stale-heading.ndjson"), 1, fx("real-fail-stale-heading.stderr.txt"));
+    expect(r.result).toBe("fail");
+    expect(r.completed).toBe(true);
+    expect(r.durationMs).toBe(23500);
+    expect(r.summary).toMatch(/^The check expected an old page heading/); // one_liner preferred
+    expect(r.evidence.details).toMatch(/outdated test expectation/);
+    expect(r.evidence.resultCode).toBe("710");
+    expect(r.evidence.reasonCode).toBe("assertion_error.final_verification");
+    expect(r.evidence.evidencePackPath).toMatch(/\/evidence\/[0-9a-f-]+\.evidence$/);
+    expect(r.evidence.testUrl).toContain("test-manager.lambdatest.com");
+    expect(r.evidence.creditsConsumed).toBeCloseTo(12.457, 2);
+    expect(r.evidence.steps.map((s) => s.status)).toEqual(["done", "done", "failed"]);
+    expect(r.evidence.steps[1]!.remark).toMatch(/^analyze:/);
+    expect(r.evidence.checks?.[0]).toMatchObject({ expected: "Example Domain", actual: "No visible main page heading", analyzer: "visual" });
+    expect(r.evidence.verdict).toMatchObject({ status: "broken", family: "automation_bug", category: "config_issue", confirmed: false });
+    expect(r.evidence.finalState).toBeUndefined(); // empty {} is dropped
+  });
+
+  it("parses a real passing run (exit 0, result_code 100, no verdict)", () => {
+    const r = parseKaneOutput(fx("real-pass.ndjson"), 0, fx("real-pass.stderr.txt"));
+    expect(r.result).toBe("pass");
+    expect(r.summary).toBe("confirmed the documentation notice on example.com");
+    expect(r.evidence.resultCode).toBe("100");
+    expect(r.evidence.reasonCode).toBe("success.complete");
+    expect(r.evidence.steps).toHaveLength(3);
+    expect(r.evidence.steps.every((s) => s.status === "done")).toBe(true);
+    expect(r.evidence.verdict).toBeUndefined();
+    expect(r.evidence.finalState).toMatchObject({ documentation_examples_text_present: "true" });
+    expect(r.evidence.evidencePackPath).toMatch(/\.evidence$/);
+    expect(r.evidence.warnings).toHaveLength(0);
+  });
+
+  it("parses a real failing run where the claim is simply false (result_code 750)", () => {
+    const r = parseKaneOutput(fx("real-fail-hello-world.ndjson"), 1, fx("real-fail-hello-world.stderr.txt"));
+    expect(r.result).toBe("fail");
+    expect(r.evidence.resultCode).toBe("750");
+    expect(r.evidence.steps.some((s) => s.status === "failed")).toBe(true);
+    expect(r.summary).toMatch(/Hello World/);
+  });
+});

@@ -112,7 +112,7 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
                       >
                         <ResultMark result={r.result} />
                         <ResultText result={r.result} />
-                        <span className="truncate text-fg-2">{failedStep ? splitRemark(failedStep.remark).text : r.summary ?? r.reason}</span>
+                        <span className="truncate text-fg-2">{r.summary ?? (failedStep ? splitRemark(failedStep.remark).text : r.reason)}</span>
                         <span className="font-mono text-fg-3">v{r.memoryVersion}</span>
                         <span className="tabular text-right font-mono text-fg-3">{duration(r.durationMs)}</span>
                         <span className="flex justify-end"><MockTag runner={r.runner} /></span>
@@ -252,11 +252,13 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
           </div>
           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-2xs text-fg-3">
             <span>{done}/{ev.steps.length} steps</span>
+            {ev.screenshots.length > 0 && <span>{ev.screenshots.length} screenshots</span>}
             <span>{duration(run.durationMs)}</span>
             <span>exit {run.exitCode ?? "—"}</span>
             {run.reason && <span>{run.reason}</span>}
             {ev.cliVersion && <span>kane-cli {ev.cliVersion}</span>}
             {ev.resultCode && <span>result_code {ev.resultCode}</span>}
+            {ev.reasonCode && <span>{ev.reasonCode}</span>}
             {ev.creditsConsumed != null && <span>{Math.round(ev.creditsConsumed * 10) / 10} credits</span>}
             <span>@ <Sha sha={run.gitSha} className="text-2xs! text-fg-3!" /></span>
             <Time iso={run.finishedAt} />
@@ -273,12 +275,21 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
             return (
               <li
                 key={s.index}
-                className={`grid grid-cols-[28px_18px_64px_minmax(0,1fr)] items-start gap-2 border-b border-line px-3.5 py-2 text-[13px] last:border-b-0 ${failed ? "bg-bad-bg" : ""}`}
+                className={`grid grid-cols-[28px_18px_64px_minmax(0,1fr)_auto] items-start gap-2 border-b border-line px-3.5 py-2 text-[13px] last:border-b-0 ${failed ? "bg-bad-bg" : ""}`}
               >
                 <span className="tabular pt-px font-mono text-2xs leading-5 text-fg-4">{String(s.index).padStart(2, "0")}</span>
                 <span className="pt-[3px]"><ResultMark result={failed ? "fail" : "pass"} /></span>
                 <span className="pt-px font-mono text-2xs leading-5 text-fg-3">{verb ?? "step"}</span>
-                <span className={`leading-5 ${failed ? "text-bad" : "text-fg-2"}`}>{text}</span>
+                <span className="min-w-0">
+                  <span className={`block break-words leading-5 ${failed ? "text-bad" : "text-fg-2"}`}>{text}</span>
+                  {s.url && <span className="block truncate font-mono text-2xs leading-4 text-fg-4">{s.url}</span>}
+                </span>
+                {s.screenshot ? (
+                  <a href={`/api/artifact/${s.screenshot}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-[4px] border border-line-strong hover:border-fg-3" title="Step screenshot from the Kane evidence pack">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/artifact/${s.screenshot}`} alt={`Step ${s.index} screenshot`} className="block h-[45px] w-[80px] object-cover object-top" loading="lazy" />
+                  </a>
+                ) : <span />}
               </li>
             );
           })}
@@ -287,6 +298,33 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
         <div className="px-3.5 py-4 text-sm text-fg-3">
           No steps reported.{" "}
           {run.result === "error" ? "Kane did not start the run — see the reason above and stderr below." : null}
+        </div>
+      )}
+
+      {(ev.checks?.length || ev.verdict || (ev.details && ev.details !== run.summary)) && (
+        <div className="space-y-3 border-t border-line px-3.5 py-3 text-xs">
+          {ev.checks?.map((c) => (
+            <div key={c.name} className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1">
+              <span className="text-fg-3">Checkpoint</span>
+              <span className="text-fg">{c.condition ?? c.name}{c.analyzer && <span className="ml-2 font-mono text-2xs text-fg-4">{c.analyzer} analyzer</span>}</span>
+              {c.expected !== undefined && (<><span className="text-fg-3">Expected</span><span className="font-mono text-2xs text-fg-2">{c.expected}</span></>)}
+              {c.actual !== undefined && (<><span className="text-fg-3">Found</span><span className={`font-mono text-2xs ${run.result === "fail" ? "text-bad" : "text-fg-2"}`}>{c.actual}</span></>)}
+            </div>
+          ))}
+          {ev.verdict && (
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1">
+              <span className="text-fg-3">Kane triage</span>
+              <span className="flex flex-wrap items-center gap-1.5">
+                {[ev.verdict.family, ev.verdict.category, ev.verdict.severity].filter(Boolean).map((t) => (
+                  <span key={t} className="rounded-[4px] border border-line-strong px-1.5 font-mono text-2xs text-fg-2">{t}</span>
+                ))}
+                {ev.verdict.confidence != null && <span className="font-mono text-2xs text-fg-4">{Math.round(ev.verdict.confidence * 100)}% confidence</span>}
+                {ev.verdict.confirmed === false && <span className="text-2xs text-fg-3">not a confirmed product bug</span>}
+              </span>
+              {ev.verdict.suggestion && (<><span className="text-fg-3">Suggestion</span><span className="text-fg-2">{ev.verdict.suggestion}</span></>)}
+            </div>
+          )}
+          {ev.details && ev.details !== run.summary && <p className="whitespace-pre-line leading-5 text-fg-3">{ev.details}</p>}
         </div>
       )}
 
@@ -310,13 +348,6 @@ function Evidence({ run, currentVersion }: { run: Run; currentVersion: number })
           <div className="flex items-center gap-2">
             <span className="w-24 shrink-0 text-fg-3">Session</span>
             <code className="min-w-0 flex-1 truncate font-mono text-2xs text-fg-2">{ev.sessionDir}</code>
-          </div>
-        )}
-        {ev.screenshots.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto">
-            {ev.screenshots.map((src) => (
-              <a key={src} href={src} target="_blank" rel="noreferrer" className="shrink-0 font-mono text-2xs text-link hover:underline">{src.split("/").pop()}</a>
-            ))}
           </div>
         )}
         {!links.length && !ev.evidencePackPath && !ev.sessionDir && (

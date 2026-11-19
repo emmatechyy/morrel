@@ -32,6 +32,9 @@ export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 
 
 /** Splits a Kane step remark like "assert: the heading says X" into verb + text. */
 export function splitRemark(remark: string): { verb: string | null; text: string } {
+  // Real Kane analyze steps look like: analyze: ANALYZE(textual_visual, "the page says '...'   (truncated by Kane)
+  const a = remark.match(/^analyze:\s+ANALYZE\(\w+,\s*"?(.*?)"?\)?$/i);
+  if (a) return { verb: "analyze", text: a[1]!.trim() };
   const m = remark.match(/^([a-z_]{2,16}):\s+(.*)$/i);
   return m ? { verb: m[1]!.toLowerCase(), text: m[2]! } : { verb: null, text: remark };
 }

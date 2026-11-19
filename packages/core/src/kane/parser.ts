@@ -10,10 +10,19 @@
  *    (overall_status). A run refused before starting may emit no completion event.
  *  - Unknown fields/types must be ignored; non-JSON lines skipped.
  *  - Exit codes: 0 pass, 1 did not pass (or upload failed), 2 did not start, 3 cancelled/timeout.
- *  - The local evidence pack path is NOT on stdout; it is a stderr hint line:
+ *  - Docs: the evidence pack path is only a stderr hint line
  *      evidence: view locally with `kane-cli evidence serve <path>`
+ *
+ * Observed on real kane-cli 0.10.6 runs (2026-11-19), beyond the docs:
+ *  - a `coverage` event (and `run_end.coverage`) carries `pack`: the evidence pack path ON STDOUT.
+ *  - `run_end.result_code` is a NUMBER (710), not a string; `per_flow_metadata[].result_code` is a string.
+ *  - `run_end.verdict` (Kane's triage: status/family/category/severity/confidence/suggestion) is present
+ *    even without --bug-detection; `reason_code` (e.g. "assertion_error.final_verification").
+ *  - `run_end.context.memory` holds each checkpoint's expected vs extracted value.
+ *  - extra typed events: recording_state, skill_update_available.
+ *  - an unauthenticated run exits 1 (docs: 2) with no run_end.
  */
-import type { Evidence, EvidenceStep, RunResult } from "../types.js";
+import type { Evidence, EvidenceCheck, EvidenceStep, EvidenceVerdict, RunResult } from "../types.js";
 
 export interface ParsedRun {
   result: RunResult;
@@ -82,6 +91,9 @@ export class KaneStreamParser {
         ev.surface = str(o.surface);
         ev.sessionDir ??= str(o.session_dir);
         break;
+      case "coverage":
+        if (str(o.pack)) ev.evidencePackPath = str(o.pack);
+        break;
       case "warning":
         ev.warnings.push(str(o.message) ?? str(o.code) ?? "warning");
         break;
@@ -116,7 +128,7 @@ export class KaneStreamParser {
   finish(exitCode: number | null, stderr = ""): ParsedRun {
     const ev = this.evidence;
     const pack = stderr.match(/kane-cli evidence serve\s+([^`\s]+)`?/);
-    if (pack?.[1]) ev.evidencePackPath = pack[1];
+    if (pack?.[1] && !ev.evidencePackPath) ev.evidencePackPath = pack[1];
     const tail = stderr.trim().split("\n").slice(-12).join("\n").trim();
     if (tail) ev.stderrTail = tail.slice(-2000);
 
@@ -144,7 +156,15 @@ export class KaneStreamParser {
       ev.sessionDir = str(end.session_dir) ?? ev.sessionDir;
       ev.resultCode = str(end.result_code) ?? (num(end.result_code) != null ? String(end.result_code) : undefined);
       ev.creditsConsumed = num(end.credits_consumed) ?? num(end.credits);
-      if (end.final_state && typeof end.final_state === "object") ev.finalState = end.final_state as Record<string, unknown>;
+      if (end.final_state && typeof end.final_state === "object" && Object.keys(end.final_state).length) ev.finalState = end.final_state as Record<string, unknown>;
+      ev.reasonCode = str(end.reason_code);
+      ev.details = str(end.summary);
+      const checks = parseChecks(end.context);
+      if (checks.length) ev.checks = checks;
+      const verdict = parseVerdict(end.verdict);
+      if (verdict) ev.verdict = verdict;
+      const cov = end.coverage as Json | undefined;
+      if (cov && str(cov.pack) && !ev.evidencePackPath) ev.evidencePackPath = str(cov.pack);
       const status = str(end.status);
       const dur = num(end.duration);
       if (status === "passed" && exitCode !== 0 && exitCode !== null) {
@@ -153,7 +173,7 @@ export class KaneStreamParser {
       return {
         result: status === "passed" ? "pass" : "fail",
         completed: true,
-        summary: str(end.summary) ?? str(end.one_liner) ?? null,
+        summary: str(end.one_liner) ?? str(end.summary) ?? null,
         reason: str(end.reason) ?? null,
         durationMs: dur != null ? Math.round(dur * 1000) : null,
         evidence: ev,
@@ -168,6 +188,38 @@ export class KaneStreamParser {
     else reason = `kane-cli exited ${exitCode ?? "abnormally"} without a completion event`;
     return { result: "error", completed: false, summary: null, reason, durationMs: null, evidence: ev };
   }
+}
+
+function parseChecks(context: unknown): EvidenceCheck[] {
+  const mem = (context as Json | undefined)?.memory;
+  if (!mem || typeof mem !== "object") return [];
+  return Object.entries(mem as Record<string, Json>)
+    .filter(([, v]) => v && typeof v === "object")
+    .map(([name, v]) => ({
+      name,
+      condition: str(v.condition) ?? str(v.query),
+      expected: v.expected_value == null ? undefined : String(v.expected_value),
+      actual: v.extracted_value == null ? undefined : String(v.extracted_value),
+      operator: str(v.operator),
+      analyzer: str(v.analyzer_type),
+      reasoning: str(v.reasoning),
+    }));
+}
+
+function parseVerdict(v: unknown): EvidenceVerdict | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Json;
+  return {
+    status: str(o.status),
+    confirmed: typeof o.confirmed === "boolean" ? o.confirmed : undefined,
+    family: str(o.family),
+    category: str(o.category),
+    severity: str(o.severity),
+    confidence: num(o.confidence),
+    title: str(o.bug_title),
+    rootCause: str(o.root_cause),
+    suggestion: str(o.suggestion),
+  };
 }
 
 /** Picks the most diagnostic stderr line: an error-ish line if any, else the last non-decorative one. */

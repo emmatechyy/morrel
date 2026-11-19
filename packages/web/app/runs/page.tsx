@@ -97,7 +97,7 @@ export default async function RunsPage({ searchParams }: { searchParams: Promise
                   </span>
                   <span className="flex min-w-0 items-center gap-2">
                     <MockTag runner={r.runner} />
-                    <span className="truncate text-fg-2">{failed ? splitRemark(failed.remark).text : r.summary ?? r.reason}</span>
+                    <span className="truncate text-fg-2">{r.summary ?? (failed ? splitRemark(failed.remark).text : r.reason)}</span>
                   </span>
                   <span>{m ? <StatusBadge status={m.status} /> : null}</span>
                   <span className="tabular text-right font-mono text-fg-3">{duration(r.durationMs)}</span>

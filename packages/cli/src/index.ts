@@ -260,6 +260,41 @@ program
   });
 
 program
+  .command("import-run")
+  .description("record a real kane-cli --agent run captured outside Morrel (e.g. in CI)")
+  .argument("<key>", "memory key or id")
+  .argument("<ndjson>", "captured stdout of `kane-cli run ... --agent`")
+  .requiredOption("--exit <code>", "kane-cli exit code")
+  .option("--stderr <file>", "captured stderr (for the evidence pack hint)")
+  .action(async (key: string, file: string, o) => {
+    const { parseKaneOutput, attachEvidencePack, scrub, newId } = await import("@morrel/core");
+    const { readFileSync, writeFileSync, mkdirSync, statSync } = await import("node:fs");
+    const s = openStore();
+    const m = s.requireMemory(key);
+    const stdout = scrub(readFileSync(file, "utf8"));
+    const stderr = o.stderr ? scrub(readFileSync(o.stderr, "utf8")) : "";
+    const exit = Number(o.exit);
+    const parsed = parseKaneOutput(stdout, exit, stderr);
+    if (parsed.evidence.cliVersion === "mock") throw new MorrelError("refusing to import a mock stream as a real run", "invalid");
+    const id = newId("run");
+    const dir = runsDir(dbPath());
+    mkdirSync(dir, { recursive: true });
+    const rawPath = join(dir, `${id}.ndjson`);
+    writeFileSync(rawPath, stdout);
+    attachEvidencePack(parsed.evidence, join(dir, id), id);
+    const lines = stdout.split("\n").filter((l) => l.startsWith("{"));
+    const tsOf = (l: string | undefined) => { try { return (JSON.parse(l ?? "{}") as { ts?: string }).ts; } catch { return undefined; } };
+    const startedAt = tsOf(lines[0]) ?? statSync(file).mtime.toISOString();
+    const finishedAt = tsOf(lines[lines.length - 1]) ?? startedAt;
+    const { run, memory } = s.recordRun({
+      id, memoryId: m.id, runner: "kane", startedAt, finishedAt, result: parsed.result, exitCode: exit,
+      durationMs: parsed.durationMs ?? Date.parse(finishedAt) - Date.parse(startedAt), summary: parsed.summary, reason: parsed.reason,
+      gitSha: currentGitSha(root()), command: `imported from ${file}`, evidence: parsed.evidence, rawNdjsonPath: rawPath,
+    });
+    out(`${resultGlyph(run)} imported real run ${run.id} → ${badge(memory.status)}`, { run, memory });
+  });
+
+program
   .command("mark-stale")
   .description("mark verified memories stale if verified against an older commit (used by hooks)")
   .action(() => {

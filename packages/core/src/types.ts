@@ -39,6 +39,34 @@ export interface EvidenceStep {
   remark: string;
   childId?: string;
   ts?: string;
+  /** Screenshot extracted from the Kane evidence pack, relative to the runs dir. */
+  screenshot?: string;
+  /** Page URL at this step (from the evidence pack). */
+  url?: string;
+}
+
+/** A checkpoint Kane evaluated (from run_end.context.memory). */
+export interface EvidenceCheck {
+  name: string;
+  condition?: string;
+  expected?: string;
+  actual?: string;
+  operator?: string;
+  analyzer?: string;
+  reasoning?: string;
+}
+
+/** Kane's own triage of a run (run_end.verdict). */
+export interface EvidenceVerdict {
+  status?: string;
+  confirmed?: boolean;
+  family?: string;
+  category?: string;
+  severity?: string;
+  confidence?: number;
+  title?: string;
+  rootCause?: string;
+  suggestion?: string;
 }
 
 export interface Evidence {
@@ -48,6 +76,11 @@ export interface Evidence {
   surface?: string;
   steps: EvidenceStep[];
   oneLiner?: string;
+  /** Kane's long-form summary (run.summary holds the one-liner when available). */
+  details?: string;
+  reasonCode?: string;
+  checks?: EvidenceCheck[];
+  verdict?: EvidenceVerdict;
   finalState?: Record<string, unknown>;
   /** Test Manager link (present when Kane's upload succeeded). */
   testUrl?: string;

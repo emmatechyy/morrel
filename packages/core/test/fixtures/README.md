@@ -1,11 +1,14 @@
 # Kane CLI NDJSON fixtures
 
-| File | Provenance |
-| --- | --- |
-| `real-unauthenticated.ndjson` + `.stderr.txt` | **REAL.** Captured 2026-11-19 (twice, identical shape) from `kane-cli 0.10.6` (`kane-cli run "..." --url https://example.com --agent --headless`, not logged in). Exit code was **1** (docs say auth refusals exit 2 — so Morrel keys on the missing completion event, not the exit code). |
-| `synthetic-pass.ndjson` | **SYNTHETIC.** Built from the documented example stream in the Kane CLI "Agent Mode" docs and the skill `parsing.md` reference. |
-| `synthetic-fail.ndjson` | **SYNTHETIC.** Same shape, with a `failed` step and `run_end.status = "failed"`. |
-| `synthetic-timeout.ndjson` | **SYNTHETIC.** Steps then process exit 3 with no `run_end` (documented: cancelled / `--timeout`). |
-| `synthetic-testmd.ndjson` | **SYNTHETIC.** `testmd run` surface ending in `test_md_done` (field names from docs: `overall_status`, `duration_s`, `share_url`). Step-wrapper fields are best-effort. |
+**REAL** = captured from `kane-cli 0.10.6` on 2026-11-19 against https://example.com. Credentials were scrubbed (none appeared). Test Manager project / test-case ids and share tokens were replaced with `PROJECT_ID`, `TEST_CASE_ID`, `SHARE_TOKEN`. **SYNTHETIC** = hand-written from the documented shapes, kept for edge cases with no real capture yet.
 
-Replace synthetic fixtures with real captures once Kane credentials are available (`morrel verify` keeps every raw stream under `.morrel/runs/<run_id>.ndjson`).
+| File | Provenance | What it shows |
+| --- | --- | --- |
+| `real-pass.ndjson` + `.stderr.txt` | **REAL** (via `morrel verify`) | exit 0, `run_end.status:"passed"`, `result_code:100`, `reason_code:"success.complete"`, 13.82 credits |
+| `real-fail-stale-heading.ndjson` + `.stderr.txt` | **REAL** (direct `kane-cli run`) | The docs' own example ("heading says Example Domain") now **fails**: example.com no longer renders that heading. exit 1, `result_code:710`, `verdict` (automation_bug / config_issue), `context.memory` with expected vs extracted, 12.46 credits |
+| `real-fail-hello-world.ndjson` + `.stderr.txt` | **REAL** (via `morrel verify`) | A false claim. exit 1, `result_code:750`, 12.58 credits. stderr is the tail Morrel keeps |
+| `real-unauthenticated.ndjson` + `.stderr.txt` | **REAL** | Not logged in: exit **1** (docs say 2), no `run_end` |
+| `synthetic-pass.ndjson` | SYNTHETIC | Documented example stream, plus noise lines and unknown events |
+| `synthetic-fail.ndjson` | SYNTHETIC | `warning` (unresolved_variables) + failed step |
+| `synthetic-timeout.ndjson` | SYNTHETIC | exit 3, no `run_end` |
+| `synthetic-testmd.ndjson` | SYNTHETIC | `testmd` surface ending in `test_md_done`. Step wrapper fields are a best guess |

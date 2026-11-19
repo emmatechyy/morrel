@@ -1,0 +1,6 @@
+Skill update available: not installed → 0.1.4 — run `kane-cli install skill`
+
+info: auto-configured project "KaneAI Generated" (PROJECT_ID) and folder "Untitled" (FOLDER_ID). Change with: kane-cli config project <id> / kane-cli config folder <id>.
+Running on: Desktop · Chrome
+evidence: 1 status_disagrees advisory(ies) — self-explained by triaged failure record(s)
+evidence: view locally with `kane-cli evidence serve /home/box/.testmuai/kaneai/sessions/2182208f-ec2f-42cc-ac3c-7cb2fe9eb800/evidence/44a66b57-d88f-47e0-a55a-3378dca22095.evidence`

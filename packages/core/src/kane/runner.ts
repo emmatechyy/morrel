@@ -20,6 +20,17 @@ export interface KaneRunOptions {
   onStderr?: (chunk: string) => void;
 }
 
+/** Values that must never be persisted (raw NDJSON, stderr, evidence). */
+export function secretValues(): string[] {
+  return [process.env.LT_ACCESS_KEY, process.env.LT_USERNAME].filter((v): v is string => !!v && v.length >= 4);
+}
+
+export function scrub(text: string, secrets: string[] = secretValues()): string {
+  let out = text;
+  for (const v of secrets) out = out.split(v).join("[REDACTED]");
+  return out;
+}
+
 export interface KaneRunOutcome extends ParsedRun {
   exitCode: number | null;
   command: string;
@@ -83,14 +94,16 @@ export function runKane(opts: KaneRunOptions): Promise<KaneRunOutcome> {
       ? setTimeout(() => child.kill("SIGKILL"), (opts.timeoutSec + 30) * 1000)
       : null;
 
-    const feed = (line: string) => {
+    const secrets = secretValues();
+    const feed = (rawLine: string) => {
+      const line = scrub(rawLine, secrets);
+      raw.write(line + "\n");
       const ev = parser.push(line);
       if (ev) opts.onEvent?.(ev);
     };
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
-      raw.write(chunk);
       buf += chunk;
       let i: number;
       while ((i = buf.indexOf("\n")) >= 0) {
@@ -100,9 +113,9 @@ export function runKane(opts: KaneRunOptions): Promise<KaneRunOutcome> {
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
+      stderr += scrub(chunk, secrets);
       if (stderr.length > 64_000) stderr = stderr.slice(-64_000);
-      opts.onStderr?.(chunk);
+      opts.onStderr?.(scrub(chunk, secrets));
     });
 
     const finish = (exitCode: number | null) => {
@@ -111,7 +124,7 @@ export function runKane(opts: KaneRunOptions): Promise<KaneRunOutcome> {
       if (hardKill) clearTimeout(hardKill);
       if (buf) feed(buf);
       raw.end();
-      const parsed = parser.finish(exitCode, stderr);
+      const parsed = parser.finish(exitCode, scrub(stderr, secrets));
       resolve({ ...parsed, exitCode, command: display, wallMs: Date.now() - started });
     };
 

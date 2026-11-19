@@ -2,7 +2,8 @@ import { join } from "node:path";
 import { dirname } from "node:path";
 import { currentGitSha } from "./git.js";
 import { runMock } from "./kane/mock.js";
-import { runKane, type KaneRunOutcome } from "./kane/runner.js";
+import { runKane, scrub, type KaneRunOutcome } from "./kane/runner.js";
+import { attachEvidencePack } from "./kane/evidence-pack.js";
 import { MorrelStore, newId } from "./store.js";
 import type { Memory, Run } from "./types.js";
 
@@ -51,6 +52,8 @@ export async function verifyMemory(store: MorrelStore, idOrKey: string, opts: Ve
     });
   }
   const finishedAt = new Date().toISOString();
+  if (!mock) attachEvidencePack(out.evidence, join(opts.runsDir, runId), runId);
+  const evidence = JSON.parse(scrub(JSON.stringify(out.evidence))) as typeof out.evidence;
   return store.recordRun({
     id: runId,
     memoryId: memory.id,
@@ -61,11 +64,11 @@ export async function verifyMemory(store: MorrelStore, idOrKey: string, opts: Ve
     result: out.result,
     exitCode: out.exitCode,
     durationMs: out.durationMs ?? out.wallMs,
-    summary: out.summary,
-    reason: out.reason,
+    summary: out.summary && scrub(out.summary),
+    reason: out.reason && scrub(out.reason),
     gitSha: sha,
     command: out.command,
-    evidence: out.evidence,
+    evidence,
     rawNdjsonPath: rawPath,
   });
 }
