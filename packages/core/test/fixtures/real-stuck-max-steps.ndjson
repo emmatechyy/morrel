@@ -1,0 +1,1 @@
+{"type":"run_end","status":"failed","result_code":310,"reason_code":"stuck.max_steps","one_liner":"The sign-in succeeded and the requested heading was visible, but the automation run ran out of allowed steps before it recorded the verification.","reason":"Maximum steps exceeded (7/6)","duration":31.1,"credits_consumed":16.3134725}

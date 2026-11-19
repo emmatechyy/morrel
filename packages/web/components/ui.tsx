@@ -19,7 +19,7 @@ export function Time({ iso, className = "" }: { iso: string | null | undefined; 
 }
 
 export function Sha({ sha, className = "" }: { sha: string | null | undefined; className?: string }) {
-  if (!sha) return <span className={`font-mono text-xs text-fg-4 ${className}`}>———————</span>;
+  if (!sha) return <span title="No run has recorded a commit yet" className={`text-xs text-fg-4 ${className}`}>no commit</span>;
   return (
     <span title={sha} className={`font-mono text-xs text-fg-2 ${className}`}>
       {sha.slice(0, 7)}

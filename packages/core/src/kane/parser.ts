@@ -170,8 +170,11 @@ export class KaneStreamParser {
       if (status === "passed" && exitCode !== 0 && exitCode !== null) {
         ev.warnings.push(`Kane reported "passed" but exited ${exitCode} (per docs: upload to Test Manager may have failed).`);
       }
+      // "stuck.*" (e.g. stuck.max_steps, result_code 310) means Kane ran out of budget before reaching a
+      // verdict. That says nothing about the app, so it must not fail (or later "recover") a memory.
+      const inconclusive = status !== "passed" && /^stuck\./.test(ev.reasonCode ?? "");
       return {
-        result: status === "passed" ? "pass" : "fail",
+        result: status === "passed" ? "pass" : inconclusive ? "error" : "fail",
         completed: true,
         summary: str(end.one_liner) ?? str(end.summary) ?? null,
         reason: str(end.reason) ?? null,

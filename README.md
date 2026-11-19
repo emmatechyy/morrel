@@ -2,7 +2,7 @@
 
 **A memory store for coding agents where a memory is trusted only while its Kane CLI flow passes.**
 
-**Live demo (read-only): https://morrel.vercel.app**: the board with the real example.com Kane runs and their step screenshots, plus seeded `MOCK` data.
+**Live demo (read-only): https://morrel.vercel.app**. Every row on it is a real Kane CLI run against a small demo app, **Acme Shop** (https://morrel-demo-shop.vercel.app, source in [`examples/acme-shop`](examples/acme-shop)). There is no mock data in the public demo.
 
 Agents accumulate beliefs about the app they work on — *"login redirects to /dashboard"*, *"SAVE10 takes 10% off"*.
 Those beliefs rot silently as code changes. In Morrel, every memory is a **claim** linked to a
@@ -15,36 +15,38 @@ Those beliefs rot silently as code changes. In Morrel, every memory is a **claim
 
 Non-goals: cryptographic proofs, general-purpose memory, multi-user/auth/billing. "Verified" means one thing: the latest Kane run of the current version passed.
 
-### Real Kane CLI runs (kane-cli 0.10.6, 19 Nov 2026)
+### The public demo: real Kane runs against Acme Shop (kane-cli 0.10.6, 19 Nov 2026)
 
-| Board | Trusted memory: real pass, step screenshots, Test Manager link |
+![Board](docs/screenshots/demo-board.png)
+
+Eight memories about Acme Shop, each verified by a real `kane-cli run` (17 runs, about 210 credits in total). The board reads **6 of 8 trusted**, and Kane has caught two problems:
+
+1. **Baseline.** At shop commit `2fcdeee`, all eight flows ran. Seven passed. Login hit `stuck.max_steps` (Kane ran out of its 6-step budget after the sign-in had visibly worked). Morrel records that as an **error**, which is inconclusive and is not counted as a product failure (see [the fixture](packages/core/test/fixtures/real-stuck-max-steps.ndjson)).
+2. **The app changed.** Commit `57c84e1` did two things. It raised the free-shipping threshold to $75 (an intended change), and it introduced a **deliberate regression**: a mistyped coupon expiry year. `morrel mark-stale` (what the post-commit hook runs) moved every verified memory to stale.
+3. **Kane caught both.** `checkout-save10-discount` **failed**: *"SAVE10 was applied but the checkout explicitly reports that it has expired"*. `checkout-free-shipping` **failed** too, with expected `Free` and found `$6.95`.
+4. **The loop closed.** The agent ran `morrel update checkout-free-shipping` with the new claim (*"Free shipping starts at $75: the $60.00 sample order pays $6.95 shipping"*). The update bumped the memory to v2 and re-ran it, and the real run **passed**. The board marks this memory `recovered`.
+5. Five more memories were re-verified at `57c84e1` and passed, login included (now with a 10-step budget). `theme-persists-reload` was left **stale** on purpose, to show what a memory awaiting re-verification looks like. The SAVE10 regression is left in the live shop, so that memory stays **failed** and agents get an UNTRUSTED warning for it.
+
+| The loop: pass → app changed → fail (expected vs found) → rewritten v2 → pass | Caught regression |
 | --- | --- |
-| ![Real board](docs/screenshots/real-board.png) | ![Trusted](docs/screenshots/real-detail-trusted.png) |
+| ![Loop](docs/screenshots/demo-detail-loop.png) | ![Caught](docs/screenshots/demo-detail-caught.png) |
 
-What happened, start to finish:
-1. We recorded the claim from the Kane docs' own example: *"example.com's main heading says 'Example Domain'"*. A real Kane run **failed** (`result_code 710`). example.com no longer renders that heading: "Example Domain" only survives in `<title>`. Kane's triage labelled it `automation_bug / config_issue · 97%`, an outdated expectation. ([screenshot](docs/screenshots/real-detail-stale-heading-run.png))
-2. We rewrote the memory with `morrel update`. That bumped it to v2 and marked it stale, then the real re-run **passed**. The gate now returns `trusted: true`.
-3. A false claim (*"heading says 'Hello World'"*) **failed** (`result_code 750`) and stays gated. ([screenshot](docs/screenshots/real-detail-failed.png))
+**Commit tracking.** Each run records the commit of the app under test. Here that is the last commit touching `examples/acme-shop` (`MORREL_APP_DIR=examples/acme-shop`), so Morrel's own commits do not make memories stale. Without `MORREL_APP_DIR`, the run records `HEAD` of the repo `morrel` runs in. The board's commit column shows the commit of the latest pass or fail. It reads `no commit` only when no run has recorded one.
 
-### Demo data (mock runner)
+**Gate column.** *Trusted*: the latest real Kane run of the current version passed. *Gated*: agents get an UNTRUSTED warning, because the memory is failed, stale or never verified. *Mock only*: it passed only on the mock runner, which is never trusted. This legend is under the table, and in a popover on the column header.
 
-![Board](docs/screenshots/board.png)
+#### How the public demo is built
 
-| Memory detail (failed, with step evidence + raw NDJSON) | Runs log |
-| --- | --- |
-| ![Detail](docs/screenshots/detail-failed.png) | ![Runs](docs/screenshots/runs.png) |
+- The board runs with `MORREL_DEMO=1`. It reads `packages/web/demo/demo.json` instead of SQLite, so nothing can be verified there. Run `morrel` locally for that.
+- `node scripts/export-demo.mjs` exports `.morrel/shop/morrel.db` and copies the real Kane step screenshots to `packages/web/public/demo-artifacts/`. It **refuses to export a mock run**. It also replaces home paths and project ids with placeholders, withholds Test Manager links, and fails if a credential value appears in the output.
+- Vercel (team `toly4441-1234`):
+  - Project `morrel`: root `packages/web`, Node 24.x (for `node:sqlite`). The build in `packages/web/vercel.json` is `pnpm --filter @morrel/core run build && next build`.
+  - Project `morrel-demo-shop`: a static deploy of `examples/acme-shop`.
+- Reproduce the runs locally: `MORREL_DB=.morrel/shop/morrel.db MORREL_APP_DIR=examples/acme-shop pnpm morrel verify <key> --max-steps 8`.
 
-> These screenshots use `pnpm seed` demo data. **Every run in them comes from the mock runner** (labelled `MOCK`), so no memory shows as *Trusted*: the gate never trusts mock passes.
+### Local mock data (development only)
 
-### Public demo (Vercel)
-
-https://morrel.vercel.app is the board running with `MORREL_DEMO=1`. It reads a bundled JSON export instead of SQLite, so nothing can be verified there. Run `morrel` locally for that.
-
-- `node scripts/export-demo.mjs` merges the mock seed DB and the real-run DB into `packages/web/demo/demo.json` and copies the real Kane step screenshots to `packages/web/public/demo-artifacts/`. It replaces paths and project ids with placeholders, withholds Test Manager links, and fails if a credential value appears in the output.
-- Mock runs stay labelled `MOCK` and are never trusted. Only `example-heading` is trusted, because a real Kane run passed it.
-- Vercel project settings: root `packages/web`, Node 24.x (for `node:sqlite`). The build in `packages/web/vercel.json` runs `pnpm --filter @morrel/core run build && next build`.
-
-![Live demo detail](docs/screenshots/demo-detail-trusted.png)
+`pnpm seed` fills `.morrel/morrel.db` with a fictional dataset where every run comes from the mock runner (`MORREL_KANE_MOCK=1`). Those rows are labelled `MOCK` and never trusted, and they never appear in the public demo. The older screenshots in `docs/screenshots/` (`board.png`, `detail-*.png`, `runs.png`, `real-*.png`) come from that seed and from the first example.com runs.
 
 ## Architecture
 

@@ -368,7 +368,8 @@ export class MorrelStore {
           reason = `Verification could not run${mockNote}: ${input.reason ?? "error"}`;
         }
         const verifiedAt = input.result === "pass" ? input.finishedAt : m.lastVerifiedAt;
-        const sha = input.result === "pass" ? input.gitSha : m.gitSha;
+        // The commit the latest real result (pass or fail) was observed at; errors prove nothing.
+        const sha = input.result === "error" ? m.gitSha : (input.gitSha ?? m.gitSha);
         this.db
           .prepare(
             `UPDATE memories SET status = ?, status_reason = ?, last_verified_at = ?, git_sha = ?, last_run_id = ?, last_runner = ?, updated_at = ? WHERE id = ?`,

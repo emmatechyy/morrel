@@ -7,6 +7,7 @@
 | `real-pass.ndjson` + `.stderr.txt` | **REAL** (via `morrel verify`) | exit 0, `run_end.status:"passed"`, `result_code:100`, `reason_code:"success.complete"`, 13.82 credits |
 | `real-fail-stale-heading.ndjson` + `.stderr.txt` | **REAL** (direct `kane-cli run`) | The docs' own example ("heading says Example Domain") now **fails**: example.com no longer renders that heading. exit 1, `result_code:710`, `verdict` (automation_bug / config_issue), `context.memory` with expected vs extracted, 12.46 credits |
 | `real-fail-hello-world.ndjson` + `.stderr.txt` | **REAL** (via `morrel verify`) | A false claim. exit 1, `result_code:750`, 12.58 credits. stderr is the tail Morrel keeps |
+| `real-stuck-max-steps.ndjson` | **REAL** (run_end line only, via `morrel verify --max-steps 6`) | Kane ran out of steps after the sign-in visibly succeeded: `status:"failed"`, `result_code:310`, `reason_code:"stuck.max_steps"`. Morrel records it as **error** (inconclusive), not fail |
 | `real-unauthenticated.ndjson` + `.stderr.txt` | **REAL** | Not logged in: exit **1** (docs say 2), no `run_end` |
 | `synthetic-pass.ndjson` | SYNTHETIC | Documented example stream, plus noise lines and unknown events |
 | `synthetic-fail.ndjson` | SYNTHETIC | `warning` (unresolved_variables) + failed step |

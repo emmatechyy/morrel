@@ -31,6 +31,16 @@ describe("MorrelStore", () => {
     expect(g.warning).toMatch(/never been verified/);
   });
 
+  it("records the commit of the latest pass or fail, but not of an errored run", () => {
+    const m = store.createMemory({ claim: "c", flow: { objective: "o" } });
+    run(m.id, "error", "kane", "e1");
+    expect(store.getMemory(m.id).memory.gitSha).toBeNull();
+    run(m.id, "fail", "kane", "f1");
+    expect(store.getMemory(m.id).memory.gitSha).toBe("f1");
+    run(m.id, "pass", "kane", "p1");
+    expect(store.getMemory(m.id).memory.gitSha).toBe("p1");
+  });
+
   it("rejects memories without a flow", () => {
     expect(() => store.createMemory({ claim: "x", flow: {} })).toThrow(/flow/);
   });

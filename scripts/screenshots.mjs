@@ -53,11 +53,23 @@ if (process.env.REAL_URL) {
   }
 }
 if (process.env.DEMO_URL) {
-  for (const [name, path, full] of [["demo-board", "/", false], ["demo-detail-trusted", "/memories/example-heading", true]]) {
-    await page.goto(process.env.DEMO_URL + path, { waitUntil: "networkidle" });
+  // Board over real Kane runs against the Acme Shop demo app (live demo, or a local server on .morrel/shop/morrel.db).
+  const D = process.env.DEMO_URL;
+  for (const [name, path, full] of [
+    ["demo-board", "/", false],
+    ["demo-detail-loop", "/memories/checkout-free-shipping", true],
+    ["demo-detail-caught", "/memories/checkout-save10-discount", true],
+  ]) {
+    await page.goto(D + path, { waitUntil: "load" });
+    await page.waitForTimeout(600);
     await page.addStyleTag({ content: "header{position:relative!important}" });
     await page.screenshot({ path: `${out}${name}.png`, fullPage: full });
     console.log(`${out}${name}.png`);
   }
+  await page.goto(D + "/", { waitUntil: "load" });
+  await page.hover('[role=row] [role=tooltip] >> xpath=..');
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${out}demo-gate-legend.png`, clip: { x: 0, y: 120, width: 1440, height: 420 } });
+  console.log(`${out}demo-gate-legend.png`);
 }
 await browser.close();

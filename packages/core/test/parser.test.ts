@@ -42,6 +42,14 @@ describe("Kane NDJSON parser", () => {
     expect(r.evidence.cliVersion).toBe("0.10.6");
   });
 
+  it("treats a real stuck.max_steps run_end (result_code 310) as error, not a product failure", () => {
+    const r = parseKaneOutput(fx("real-stuck-max-steps.ndjson"), 1);
+    expect(r.result).toBe("error");
+    expect(r.completed).toBe(true);
+    expect(r.evidence.reasonCode).toBe("stuck.max_steps");
+    expect(r.reason).toMatch(/Maximum steps exceeded/);
+  });
+
   it("treats exit 3 without run_end as cancelled/timeout error", () => {
     const r = parseKaneOutput(fx("synthetic-timeout.ndjson"), 3);
     expect(r.result).toBe("error");

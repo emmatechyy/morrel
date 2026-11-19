@@ -38,3 +38,14 @@ export function splitRemark(remark: string): { verb: string | null; text: string
   const m = remark.match(/^([a-z_]{2,16}):\s+(.*)$/i);
   return m ? { verb: m[1]!.toLowerCase(), text: m[2]! } : { verb: null, text: remark };
 }
+
+/** "13:02" in the board's display zone. */
+export function clock(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: process.env.MORREL_TZ || "Africa/Lagos" });
+}
+
+export function gap(fromIso: string, toIso: string): string {
+  const m = Math.max(0, Math.round((Date.parse(toIso) - Date.parse(fromIso)) / 60000));
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}

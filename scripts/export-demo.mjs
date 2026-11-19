@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Builds the read-only public demo dataset for packages/web (MORREL_DEMO=1):
- *   - mock seed data from ./.morrel/morrel.db   (pnpm seed; every run is runner = "mock")
- *   - real Kane runs from ./.morrel/real/morrel.db (example.com flows)
+ *   - real Kane runs only, from ./.morrel/shop/morrel.db: memories about the Acme Shop demo app
+ *     (examples/acme-shop, deployed at https://morrel-demo-shop.vercel.app). Mock data stays local
+ *     (pnpm seed, tests) and the export refuses to include a mock run.
  * Writes packages/web/demo/demo.json and copies real step screenshots to packages/web/public/demo-artifacts/.
  * Sanitises: LT credentials (scrub), Test Manager share links/ids (removed), home paths (~).
  */
@@ -52,10 +53,12 @@ function exportDb(path, source) {
   return { memories, runs, events, raw, source };
 }
 
-const parts = [exportDb(join(root, ".morrel/morrel.db"), "mock"), exportDb(join(root, ".morrel/real/morrel.db"), "real")];
+const parts = [exportDb(process.env.MORREL_DEMO_SOURCE ?? join(root, ".morrel/shop/morrel.db"), "real")];
+const mockRuns = parts.flatMap((p) => p.runs).filter((r) => r.runner !== "kane");
+if (mockRuns.length) throw new Error(`public demo must contain only real Kane runs; found ${mockRuns.length} mock run(s)`);
 const data = {
   exportedAt: new Date().toISOString(),
-  note: "Read-only demo. Mock-seed timestamps are shifted to stay relative to now; real Kane runs keep their true timestamps.",
+  note: "Read-only demo. Every run is a real Kane CLI run against https://morrel-demo-shop.vercel.app, with its true timestamp.",
   memories: parts.flatMap((p) => p.memories.map((m) => ({ ...m, source: p.source }))),
   runs: parts.flatMap((p) => p.runs.map((r) => ({ ...r, source: p.source }))),
   events: parts.flatMap((p) => p.events.map((e) => ({ ...e, source: p.source }))),

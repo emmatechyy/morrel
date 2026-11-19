@@ -4,10 +4,11 @@ import { Fragment, Suspense } from "react";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isMockEnv, type MemoryEvent, type Run } from "@morrel/core";
 import { dbPath, demoRaw, isDemo, withStore } from "@/lib/store";
-import { duration, splitRemark } from "@/lib/format";
+import { absTime, clock, duration, gap, splitRemark } from "@/lib/format";
+import { recoveryOf } from "@/lib/loop";
 import { AutoRefresh, CopyButton, Shortcuts } from "@/components/client";
 import { Page, TopBar } from "@/components/shell";
-import { MockTag, ResultMark, ResultText, StatusBadge, StatusDot, TrustMark } from "@/components/status";
+import { MockTag, RecoveredTag, ResultMark, ResultText, StatusBadge, StatusDot, TrustMark } from "@/components/status";
 import { Code, ExternalLink, Kbd, SectionLabel, Sha, Time } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,7 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
         {/* Title */}
         <header className="border-b border-line pb-6 pt-3">
           <div className="flex items-center gap-2.5">
-            <StatusBadge status={m.status} size="md" />
+            <StatusBadge status={m.status} lastResult={gated.lastRun?.result} size="md" />
             <span className="font-mono text-xs text-fg-3">v{m.version}</span>
             <span className="text-fg-4">·</span>
             <span className="font-mono text-xs text-fg-4">{m.id}</span>
@@ -55,6 +56,7 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
             {m.claim}
           </h1>
           <GateBanner trusted={gated.trusted} warning={gated.warning} status={m.status} />
+          <LoopStrip events={events} runs={runs} />
         </header>
 
         <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 pt-6">
@@ -96,31 +98,8 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
 
             {runs.length > 0 && (
               <section>
-                <SectionLabel right={<span className="tabular text-2xs text-fg-4">{runs.length} runs</span>}>Run timeline</SectionLabel>
-                <div className="overflow-hidden rounded-md border border-line">
-                  {runs.map((r) => {
-                    const on = selected?.id === r.id;
-                    const failedStep = r.evidence.steps.find((s) => s.status === "failed");
-                    return (
-                      <Link
-                        key={r.id}
-                        href={`/memories/${m.key}?run=${r.id}`}
-                        scroll={false}
-                        className={`grid grid-cols-[18px_52px_minmax(0,1fr)_40px_64px_72px_80px] items-center gap-3 border-b border-line px-3 py-2 text-xs last:border-b-0 ${
-                          on ? "bg-raised" : "hover:bg-panel"
-                        }`}
-                      >
-                        <ResultMark result={r.result} />
-                        <ResultText result={r.result} />
-                        <span className="truncate text-fg-2">{r.summary ?? (failedStep ? splitRemark(failedStep.remark).text : r.reason)}</span>
-                        <span className="font-mono text-fg-3">v{r.memoryVersion}</span>
-                        <span className="tabular text-right font-mono text-fg-3">{duration(r.durationMs)}</span>
-                        <span className="flex justify-end"><MockTag runner={r.runner} /></span>
-                        <Time iso={r.finishedAt} className="text-right text-fg-3" />
-                      </Link>
-                    );
-                  })}
-                </div>
+                <SectionLabel right={<span className="tabular text-2xs text-fg-4">{runs.length} runs · oldest first</span>}>Run timeline</SectionLabel>
+                <Timeline memoryKey={m.key} runs={runs} events={events} selectedId={selected?.id ?? null} />
               </section>
             )}
           </div>
@@ -130,12 +109,12 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
             <section>
               <SectionLabel>Properties</SectionLabel>
               <dl className="divide-y divide-line rounded-md border border-line text-xs">
-                <Prop k="Status"><StatusBadge status={m.status} /></Prop>
+                <Prop k="Status"><StatusBadge status={m.status} lastResult={gated.lastRun?.result} /></Prop>
                 <Prop k="Gate"><TrustMark trusted={gated.trusted} mockOnly={m.status === "verified" && m.lastRunner === "mock"} /></Prop>
                 <Prop k="Key"><span className="font-mono text-fg">{m.key}</span></Prop>
                 <Prop k="Version"><span className="font-mono">v{m.version}</span></Prop>
-                <Prop k="Verified"><Time iso={m.lastVerifiedAt} /></Prop>
-                <Prop k="At commit"><Sha sha={m.gitSha} /></Prop>
+                <Prop k="Last passed"><Time iso={m.lastVerifiedAt} /></Prop>
+                <Prop k="Last run at commit"><Sha sha={m.gitSha ?? gated.lastRun?.gitSha} /></Prop>
                 <Prop k="Runner">{m.lastRunner ? <span className="flex items-center gap-1.5 font-mono">{m.lastRunner === "kane" ? "kane-cli" : "mock"}<MockTag runner={m.lastRunner} /></span> : <span className="text-fg-4">—</span>}</Prop>
                 <Prop k="Created"><Time iso={m.createdAt} /></Prop>
                 <Prop k="Updated"><Time iso={m.updatedAt} /></Prop>
@@ -533,5 +512,176 @@ function EventItem({ e, memoryKey }: { e: MemoryEvent; memoryKey: string }) {
         </div>
       )}
     </li>
+  );
+}
+
+/** The first check whose expectation was not met, as a short "expected / found" pair. */
+function mismatch(run: Run): { expected: string; found: string } | null {
+  for (const c of run.evidence.checks ?? []) {
+    if (c.expected !== undefined && c.actual !== undefined && String(c.expected) !== String(c.actual)) {
+      return { expected: String(c.expected), found: String(c.actual) };
+    }
+  }
+  return null;
+}
+
+type LoopStep = { kind: "pass" | "fail" | "error" | "rewrite" | "stale" | "created"; at: string; label: string; detail?: string; runId?: string };
+
+function loopSteps(events: MemoryEvent[], runs: Run[]): LoopStep[] {
+  const byId = new Map(runs.map((r) => [r.id, r]));
+  return [...events]
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id - b.id))
+    .flatMap((e): LoopStep[] => {
+      const runId = typeof e.detail.runId === "string" ? e.detail.runId : undefined;
+      const run = runId ? byId.get(runId) : undefined;
+      if (e.type === "run_passed") return [{ kind: "pass", at: e.createdAt, label: `v${e.version} passed`, runId }];
+      if (e.type === "run_failed") {
+        const mm = run && mismatch(run);
+        return [{ kind: "fail", at: e.createdAt, label: `v${e.version} failed`, detail: mm ? `found ${mm.found}` : run?.summary ?? undefined, runId }];
+      }
+      if (e.type === "run_error") return [{ kind: "error", at: e.createdAt, label: `v${e.version} run errored`, runId }];
+      if (e.type === "updated") return [{ kind: "rewrite", at: e.createdAt, label: `rewritten → v${e.version}`, detail: Array.isArray(e.detail.changed) ? `changed ${(e.detail.changed as string[]).join(", ")}` : undefined }];
+      if (e.type === "marked_stale") return [{ kind: "stale", at: e.createdAt, label: "code changed", detail: typeof e.detail.toSha === "string" ? `now at ${e.detail.toSha.slice(0, 7)}` : undefined }];
+      return [];
+    });
+}
+
+const STEP_TONE: Record<LoopStep["kind"], string> = {
+  pass: "text-ok", fail: "text-bad", error: "text-warn", rewrite: "text-fg", stale: "text-warn", created: "text-fg-3",
+};
+
+function StepIcon({ kind }: { kind: LoopStep["kind"] }) {
+  if (kind === "pass") return <ResultMark result="pass" />;
+  if (kind === "fail") return <ResultMark result="fail" />;
+  if (kind === "error") return <ResultMark result="error" />;
+  if (kind === "stale") return <span className="inline-block size-1.5 rounded-full bg-warn" aria-hidden />;
+  return (
+    <svg viewBox="0 0 16 16" className="size-3.5 text-fg-2" aria-hidden>
+      <path d="M10.5 3.5l2 2-6.75 6.75-2.75.75.75-2.75z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Compact fail → rewrite → verified summary. Shown once a memory has been through more than a single pass. */
+function LoopStrip({ events, runs }: { events: MemoryEvent[]; runs: Run[] }) {
+  const steps = loopSteps(events, runs);
+  if (!steps.some((s) => s.kind !== "pass")) return null;
+  const rec = recoveryOf(runs);
+  return (
+    <div className="mt-5 flex items-stretch gap-0 overflow-x-auto rounded-md border border-line bg-panel">
+      <div className="flex shrink-0 flex-col justify-center border-r border-line px-3.5 py-2.5">
+        <span className="text-2xs font-medium uppercase tracking-[0.08em] text-fg-3">Loop</span>
+        {rec ? (
+          <span className="mt-1 flex items-center gap-1.5 text-xs text-fg-2">
+            <RecoveredTag /> <span className="text-fg-4">in {gap(rec.failed.finishedAt ?? rec.failed.startedAt, rec.passed.finishedAt ?? rec.passed.startedAt)}</span>
+          </span>
+        ) : (
+          <span className="mt-1 text-xs text-fg-4">open</span>
+        )}
+      </div>
+      <ol className="flex min-w-0 items-stretch">
+        {steps.map((st, i) => (
+          <li key={i} className="flex items-center">
+            {i > 0 && (
+              <svg viewBox="0 0 16 16" className="mx-0.5 size-3 shrink-0 text-fg-4" aria-hidden>
+                <path d="M3 8h9m-3-3l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {(() => {
+              const body = (
+                <span className="flex flex-col px-2.5 py-2">
+                  <span className={`flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${STEP_TONE[st.kind]}`}>
+                    <StepIcon kind={st.kind} />
+                    {st.label}
+                  </span>
+                  <span className="mt-0.5 flex max-w-[220px] items-center gap-1.5 whitespace-nowrap text-2xs text-fg-4">
+                    <time dateTime={st.at} title={absTime(st.at)} className="tabular font-mono">{clock(st.at)}</time>
+                    {st.detail && <span className="truncate text-fg-3" title={st.detail}>{st.detail}</span>}
+                  </span>
+                </span>
+              );
+              return st.runId ? (
+                <Link href={`?run=${st.runId}`} scroll={false} className="rounded-[4px] hover:bg-raised">{body}</Link>
+              ) : body;
+            })()}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** Runs and memory edits in order, so the page reads as a story: pass, fail (expected vs found), rewrite, pass. */
+function Timeline({ memoryKey, runs, events, selectedId }: { memoryKey: string; runs: Run[]; events: MemoryEvent[]; selectedId: string | null }) {
+  type Item = { at: string; run?: Run; event?: MemoryEvent };
+  const items: Item[] = [
+    ...runs.map((r) => ({ at: r.startedAt, run: r })),
+    ...events.filter((e) => e.type === "updated" || e.type === "marked_stale").map((e) => ({ at: e.createdAt, event: e })),
+  ].sort((a, b) => (a.at < b.at ? -1 : 1));
+  return (
+    <div className="overflow-hidden rounded-md border border-line">
+      {items.map((it, i) => {
+        if (it.event) {
+          const e = it.event;
+          const claim = typeof e.detail.claim === "string" ? e.detail.claim : null;
+          const prev = (e.detail.previous as { claim?: string } | undefined)?.claim;
+          return (
+            <div key={`e${e.id}`} className="border-b border-line bg-panel px-3 py-2 text-xs last:border-b-0">
+              {e.type === "updated" ? (
+                <>
+                  <div className="flex items-center gap-2 text-fg">
+                    <StepIcon kind="rewrite" />
+                    <span className="font-medium">Rewritten as v{e.version}</span>
+                    <span className="text-fg-4">{Array.isArray(e.detail.changed) ? `changed ${(e.detail.changed as string[]).join(", ")}` : ""}</span>
+                    <Time iso={e.createdAt} className="ml-auto text-fg-3" />
+                  </div>
+                  {claim && prev && claim !== prev && (
+                    <div className="mt-1.5 grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-0.5 pl-[22px]">
+                      <span className="text-fg-4">was</span><span className="text-fg-3 line-through decoration-fg-4">{prev}</span>
+                      <span className="text-fg-4">now</span><span className="text-fg-2">{claim}</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-warn">
+                  <StepIcon kind="stale" />
+                  <span className="pl-1">{typeof e.detail.reason === "string" ? e.detail.reason : "Marked stale"}</span>
+                  <Time iso={e.createdAt} className="ml-auto text-fg-3" />
+                </div>
+              )}
+            </div>
+          );
+        }
+        const r = it.run!;
+        const on = selectedId === r.id;
+        const failedStep = r.evidence.steps.find((s) => s.status === "failed");
+        const mm = r.result === "fail" ? mismatch(r) : null;
+        return (
+          <Link
+            key={r.id}
+            href={`/memories/${memoryKey}?run=${r.id}`}
+            scroll={false}
+            className={`block border-b border-line px-3 py-2 text-xs last:border-b-0 ${on ? "bg-raised" : "hover:bg-panel"}`}
+          >
+            <span className="grid grid-cols-[18px_52px_minmax(0,1fr)_40px_64px_64px_72px_80px] items-center gap-3">
+              <ResultMark result={r.result} />
+              <ResultText result={r.result} />
+              <span className="truncate text-fg-2">{r.summary ?? (failedStep ? splitRemark(failedStep.remark).text : r.reason)}</span>
+              <span className="font-mono text-fg-3">v{r.memoryVersion}</span>
+              <Sha sha={r.gitSha} className="text-fg-3!" />
+              <span className="tabular text-right font-mono text-fg-3">{duration(r.durationMs)}</span>
+              <span className="flex justify-end"><MockTag runner={r.runner} /></span>
+              <Time iso={r.finishedAt} className="text-right text-fg-3" />
+            </span>
+            {mm && (
+              <span className="mt-1 grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-0.5 pl-[30px] font-mono text-2xs">
+                <span className="text-fg-4">expected</span><span className="truncate text-fg-2">{mm.expected}</span>
+                <span className="text-fg-4">found</span><span className="truncate text-bad">{mm.found}</span>
+              </span>
+            )}
+          </Link>
+        );
+      })}
+    </div>
   );
 }

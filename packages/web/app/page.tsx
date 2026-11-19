@@ -4,7 +4,8 @@ import { MEMORY_STATUSES, isMockEnv, type MemoryStatus } from "@morrel/core";
 import { dbPath, isDemo, withStore } from "@/lib/store";
 import { AutoRefresh, SearchBox, Shortcuts } from "@/components/client";
 import { Page, TopBar } from "@/components/shell";
-import { MockTag, ResultMark, StatusBadge, TrustMark } from "@/components/status";
+import { MockTag, RecoveredTag, ResultMark, StatusBadge, TrustMark } from "@/components/status";
+import { recoveryOf } from "@/lib/loop";
 import { Code, Kbd, Sha, Time } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +20,11 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
   const q = sp.q?.trim() || undefined;
 
   const data = withStore((s) => {
-    const rows = s.listGated({ status, search: q });
-    const allTrusted = s.listGated({}).filter((g) => g.trusted).length;
-    return { rows, counts: s.counts(), allTrusted, lastRun: s.listRuns({ limit: 1 })[0] ?? null };
+    const rows = s.listGated({ status, search: q }).map((g) => ({ ...g, recovery: recoveryOf(s.listRuns({ memoryId: g.memory.id })) }));
+    const all = s.listGated({});
+    const allTrusted = all.filter((g) => g.trusted).length;
+    const recovered = all.filter((g) => g.trusted && recoveryOf(s.listRuns({ memoryId: g.memory.id }))).length;
+    return { rows, counts: s.counts(), allTrusted, recovered, lastRun: s.listRuns({ limit: 1 })[0] ?? null };
   });
   const { rows, counts } = data;
   const trusted = rows.filter((r) => r.trusted).length;
@@ -54,8 +57,17 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
           </div>
           {!empty && (
             <div className="flex shrink-0 items-center gap-6 pb-0.5">
-              <Stat label="Trusted" value={String(data.allTrusted)} sub={`of ${counts.total}`} tone={data.allTrusted ? "ok" : undefined} />
-              <Stat label="Needs attention" value={String(counts.failed + counts.stale)} sub="failed + stale" tone={counts.failed ? "bad" : counts.stale ? "warn" : undefined} />
+              <Stat label="Trusted" value={String(data.allTrusted)} sub={`of ${counts.total}`} title="Served to agents without a warning" tone={data.allTrusted ? "ok" : undefined} />
+              <Stat
+                label="Caught"
+                value={String(counts.failed + counts.stale)}
+                sub={`${counts.failed} failed · ${counts.stale} stale`}
+                tone={counts.failed ? "bad" : counts.stale ? "warn" : undefined}
+                title="Memories Morrel is withholding from agents: Kane failed the flow, or the code changed since the last pass"
+              />
+              {data.recovered > 0 && (
+                <Stat label="Recovered" value={String(data.recovered)} sub="fail → fix → pass" title="Kane caught a failure, the memory or app was fixed, and a real run passed again" />
+              )}
               <Stat label="Last run" value={<Time iso={data.lastRun?.finishedAt} />} />
             </div>
           )}
@@ -97,7 +109,7 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
               <div role="row" className="grid h-8 grid-cols-[112px_minmax(0,1fr)_92px_128px_84px_44px] items-center gap-4 border-b border-line px-3 text-2xs font-medium uppercase tracking-[0.06em] text-fg-4">
                 <span>Status</span>
                 <span>Memory</span>
-                <span>Gate</span>
+                <GateHeader />
                 <span>Last run</span>
                 <span>Commit</span>
                 <span className="text-right">Ver</span>
@@ -108,7 +120,7 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
                   {status ? <> with status {FILTER_LABEL[status]?.toLowerCase()}</> : null}.
                 </div>
               )}
-              {rows.map(({ memory: m, trusted, lastRun }) => (
+              {rows.map(({ memory: m, trusted, lastRun, recovery }) => (
                 <Link
                   key={m.id}
                   href={`/memories/${m.key}`}
@@ -118,7 +130,7 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
                   className="grid min-h-[52px] grid-cols-[112px_minmax(0,1fr)_92px_128px_84px_44px] items-center gap-4 border-b border-line px-3 py-2 transition-colors hover:bg-panel"
                 >
                   <span>
-                    <StatusBadge status={m.status} />
+                    <StatusBadge status={m.status} lastResult={lastRun?.result} />
                   </span>
                   <span className="min-w-0">
                     <span className={`block truncate text-sm ${m.status === "retired" ? "text-fg-3 line-through decoration-fg-4" : "text-fg"}`}>
@@ -126,10 +138,11 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
                     </span>
                     <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-fg-3">
                       <span className="shrink-0 font-mono text-fg-2">{m.key}</span>
+                      {recovery && trusted && <RecoveredTag />}
                       <span className="text-fg-4">·</span>
                       {(m.status === "failed" || m.status === "stale") && m.statusReason ? (
                         <span className={`truncate ${m.status === "failed" ? "text-bad/80" : "text-warn/80"}`}>
-                          {m.statusReason.replace(/^Kane flow failed \(mock runner\): |^Kane flow failed: /, "").replace(/^MOCK: /, "")}
+                          {m.statusReason.replace(/^Kane flow failed \(mock runner\): |^Kane flow failed: /, "Kane: ").replace(/^MOCK: /, "")}
                         </span>
                       ) : (
                         <span className="truncate font-mono text-fg-4">{m.flow.file ?? m.flow.objective}</span>
@@ -145,17 +158,15 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
                     <MockTag runner={lastRun?.runner} />
                   </span>
                   <span>
-                    <Sha sha={m.gitSha} />
+                    <Sha sha={m.gitSha ?? lastRun?.gitSha} />
                   </span>
                   <span className="tabular text-right font-mono text-xs text-fg-3">v{m.version}</span>
                 </Link>
               ))}
             </div>
 
-            <footer className="mt-4 flex items-center justify-between text-2xs text-fg-4">
-              <span className="tabular">
-                {rows.length} shown · {trusted} trusted
-              </span>
+            <footer className="mt-4 flex items-start justify-between gap-6 text-2xs text-fg-4">
+              <GateLegend shown={rows.length} trusted={trusted} />
               <span className="flex items-center gap-3">
                 <span className="flex items-center gap-1"><Kbd>j</Kbd><Kbd>k</Kbd> move</span>
                 <span className="flex items-center gap-1"><Kbd>↵</Kbd> open</span>
@@ -170,10 +181,54 @@ export default async function Board({ searchParams }: { searchParams: Promise<{ 
   );
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: "ok" | "bad" | "warn" }) {
+const GATE_LEGEND: [React.ReactNode, string][] = [
+  [<TrustMark key="t" trusted />, "latest real Kane run of the current version passed"],
+  [<TrustMark key="g" trusted={false} />, "agents get an UNTRUSTED warning (failed, stale or never verified)"],
+  [<TrustMark key="m" trusted={false} mockOnly />, "passed only on the mock runner; not trusted"],
+];
+
+function GateHeader() {
+  return (
+    <span tabIndex={0} className="group relative inline-flex w-fit cursor-help items-center gap-1 outline-none">
+      Gate
+      <svg viewBox="0 0 16 16" className="size-3 text-fg-4 group-hover:text-fg-2 group-focus:text-fg-2" aria-hidden>
+        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M6.6 6.3a1.5 1.5 0 1 1 2.1 1.4c-.5.2-.7.6-.7 1.1M8 10.9v.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+      <span
+        role="tooltip"
+        className="invisible absolute left-0 top-6 z-30 w-[300px] rounded-md border border-line-strong bg-raised p-3 text-xs normal-case tracking-normal text-fg-2 opacity-0 shadow-[0_8px_24px_rgba(0,0,0,.45)] transition-opacity group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100"
+      >
+        <span className="mb-2 block font-medium text-fg">What an agent gets from <code className="font-mono">morrel get</code></span>
+        {GATE_LEGEND.map(([mark, text], i) => (
+          <span key={i} className="mt-1.5 grid grid-cols-[84px_minmax(0,1fr)] items-start gap-2 font-normal">
+            <span>{mark}</span>
+            <span className="leading-[18px] text-fg-3">{text}</span>
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function GateLegend({ shown, trusted }: { shown: number; trusted: number }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span className="tabular">
+        {shown} shown · {trusted} trusted
+      </span>
+      <span className="text-fg-4">Gate:</span>
+      <span><span className="text-ok">Trusted</span> latest real Kane run passed</span>
+      <span><span className="text-fg-3">Gated</span> agents get an UNTRUSTED warning</span>
+      <span><span className="text-fg-3">Mock only</span> mock pass, not trusted</span>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, tone, title }: { label: string; value: React.ReactNode; sub?: string; tone?: "ok" | "bad" | "warn"; title?: string }) {
   const c = tone === "ok" ? "text-ok" : tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-fg";
   return (
-    <div className="min-w-[92px] border-l border-line pl-4">
+    <div title={title} className="min-w-[92px] border-l border-line pl-4">
       <div className="text-2xs uppercase tracking-[0.06em] text-fg-4">{label}</div>
       <div className="mt-1 flex items-baseline gap-1.5">
         <span className={`tabular text-[18px] font-semibold leading-6 ${c}`}>{value}</span>

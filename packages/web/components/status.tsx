@@ -8,8 +8,14 @@ const STYLES: Record<MemoryStatus, { text: string; dot: string; box: string; lab
   retired: { text: "text-fg-4 line-through", dot: "bg-fg-4", box: "bg-transparent border-line", label: "Retired" },
 };
 
-export function StatusBadge({ status, size = "sm" }: { status: MemoryStatus; size?: "sm" | "md" }) {
-  const s = STYLES[status];
+const ERROR_STYLE = { text: "text-warn", dot: "bg-warn", box: "bg-warn-bg border-warn-line", label: "Error" };
+
+/**
+ * A memory whose only runs errored (Kane could not execute) is still "unverified" in the store,
+ * but the board must not pretend it was never run: it shows "Error" instead.
+ */
+export function StatusBadge({ status, lastResult, size = "sm" }: { status: MemoryStatus; lastResult?: RunResult | null; size?: "sm" | "md" }) {
+  const s = status === "unverified" && lastResult === "error" ? ERROR_STYLE : STYLES[status];
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-[5px] border font-medium ${s.box} ${s.text} ${
@@ -66,6 +72,19 @@ export function MockTag({ runner, className = "" }: { runner: Runner | null | un
       className={`inline-flex h-4 items-center rounded-[3px] border border-dashed border-fg-4 px-1 font-mono text-[10px] leading-none tracking-wider text-fg-2 ${className}`}
     >
       MOCK
+    </span>
+  );
+}
+
+/** Failed at some point, then passed again on the real runner: the loop closed. */
+export function RecoveredTag({ title }: { title?: string }) {
+  return (
+    <span title={title ?? "Kane caught a failure, the memory was fixed, and a real run passed again"} className="inline-flex shrink-0 items-center gap-1 font-mono text-[10px] leading-none text-ok/90">
+      <svg viewBox="0 0 16 16" className="size-3" aria-hidden>
+        <path d="M12.5 6.5A4.75 4.75 0 1 0 12.75 9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M12.75 3.5v3.25H9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      recovered
     </span>
   );
 }
