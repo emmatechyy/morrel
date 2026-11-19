@@ -1,0 +1,4 @@
+{"type":"stream_start","cli_version":"0.10.6","surface":"run","pid":20002,"v":1,"ts":"2026-11-19T09:10:00.000Z"}
+{"step":1,"status":"running","remark":"Step 1","v":1,"ts":"2026-11-19T09:10:01.000Z"}
+{"step":1,"status":"done","remark":"navigate: Navigate to https://slow.example","v":1,"ts":"2026-11-19T09:10:30.000Z"}
+{"step":2,"status":"running","remark":"Step 2","v":1,"ts":"2026-11-19T09:10:31.000Z"}

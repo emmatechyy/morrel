@@ -1,0 +1,9 @@
+{"type":"stream_start","cli_version":"0.10.6","surface":"run","pid":20001,"v":1,"ts":"2026-11-19T09:00:00.000Z"}
+{"type":"warning","code":"unresolved_variables","message":"1 variable(s) have no value — typed as written unless a step sets them first","suggested_file":".testmuai/variables/variables.json","variables":[{"name":"password","reason":"not_declared","used_by":[{"file":"objective","step":1}]}],"v":1,"ts":"2026-11-19T09:00:00.500Z"}
+{"step":1,"status":"running","remark":"Step 1","v":1,"ts":"2026-11-19T09:00:01.000Z"}
+{"step":1,"status":"done","remark":"navigate: Navigate to http://localhost:3000/login","v":1,"ts":"2026-11-19T09:00:03.000Z"}
+{"step":2,"status":"running","remark":"Step 2","v":1,"ts":"2026-11-19T09:00:03.100Z"}
+{"step":2,"status":"done","remark":"type: Typed demo@acme.dev into Email","v":1,"ts":"2026-11-19T09:00:05.000Z"}
+{"step":3,"status":"running","remark":"Step 3","v":1,"ts":"2026-11-19T09:00:05.100Z"}
+{"step":3,"status":"failed","remark":"assert: expected redirect to /dashboard but page stayed on /login with 'Invalid credentials'","v":1,"ts":"2026-11-19T09:00:12.000Z"}
+{"type":"run_end","status":"failed","summary":"Login did not redirect to the dashboard","one_liner":"Login redirect failed","reason":"Assertion failed","duration":12.4,"credits_consumed":6.2,"result_code":"710","session_dir":"~/.testmuai/kaneai/sessions/ffff0000","v":1,"ts":"2026-11-19T09:00:12.400Z"}

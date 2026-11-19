@@ -1,0 +1,7 @@
+{"type":"stream_start","cli_version":"0.10.6","surface":"testmd","pid":20003,"v":1,"ts":"2026-11-19T09:20:00.000Z"}
+{"type":"test_md_step_start","index":1,"title":"Open the pricing page","v":1,"ts":"2026-11-19T09:20:01.000Z"}
+{"type":"run_end","status":"passed","summary":"step 1 replayed","v":1,"ts":"2026-11-19T09:20:03.000Z"}
+{"type":"test_md_step_end","index":1,"status":"passed","title":"Open the pricing page","v":1,"ts":"2026-11-19T09:20:03.100Z"}
+{"type":"test_md_step_start","index":2,"title":"Verify three plans are listed","v":1,"ts":"2026-11-19T09:20:03.200Z"}
+{"type":"test_md_step_end","index":2,"status":"passed","title":"Verify three plans are listed","v":1,"ts":"2026-11-19T09:20:06.000Z"}
+{"type":"test_md_done","overall_status":"passed","duration_s":6.1,"session_id":"s-123","share_url":"https://kane.lambdatest.com/share/s-123","v":1,"ts":"2026-11-19T09:20:06.200Z"}

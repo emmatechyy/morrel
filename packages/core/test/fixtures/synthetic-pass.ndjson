@@ -1,0 +1,12 @@
+{"type":"stream_start","cli_version":"0.10.6","surface":"run","pid":16664,"v":1,"ts":"2026-11-19T08:47:26.889Z"}
+{"type":"project_folder_auto_defaulted","project":{"id":"p1","name":"Default"},"folder":{"id":"f1","name":"Kane CLI"},"v":1,"ts":"2026-11-19T08:47:27.001Z"}
+{"type":"bifurcation","flows":["Navigate to https://example.com then verify the page heading says Example Domain"],"count":1,"v":1,"ts":"2026-11-19T08:47:39.435Z"}
+{"step":2,"status":"running","remark":"Step 1","v":1,"ts":"2026-11-19T08:47:39.957Z"}
+{"step":2,"status":"done","remark":"navigate: Navigate to https://example.com","v":1,"ts":"2026-11-19T08:47:39.958Z"}
+not json — progress noise that must be skipped
+{"step":3,"status":"running","remark":"Step 2","v":1,"ts":"2026-11-19T08:47:45.100Z"}
+{"step":3,"status":"done","remark":"extract: store the page heading as 'heading'","v":1,"ts":"2026-11-19T08:47:49.010Z"}
+{"step":4,"status":"running","remark":"Step 3","v":1,"ts":"2026-11-19T08:47:50.000Z"}
+{"step":4,"status":"done","remark":"assert: the page heading says Example Domain","v":1,"ts":"2026-11-19T08:47:54.260Z"}
+{"type":"some_future_event","whatever":true,"v":1,"ts":"2026-11-19T08:47:55.000Z"}
+{"type":"run_end","status":"passed","summary":"Opened example.com and confirmed the heading reads Example Domain","one_liner":"Heading verified on example.com","reason":"Objective completed","duration":20.5,"credits_consumed":11.9,"final_state":{"heading":"Example Domain"},"test_url":"https://test-manager.lambdatest.com/projects/123/test-cases/456","session_dir":"~/.testmuai/kaneai/sessions/a1b2c3d4","v":1,"ts":"2026-11-19T08:48:10.211Z"}

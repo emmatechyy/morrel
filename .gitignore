@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+.morrel/
+*.tsbuildinfo
+.env
+.env.*
+.testmuai/
+packages/web/next-env.d.ts

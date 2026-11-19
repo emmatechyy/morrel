@@ -1,0 +1,3 @@
+Skill update available: not installed → 0.1.4 — run `kane-cli install skill`
+
+Not authenticated. Run: kane-cli login --oauth, or kane-cli login --username <user> --access-key <key>

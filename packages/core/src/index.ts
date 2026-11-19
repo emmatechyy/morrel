@@ -1,0 +1,11 @@
+export * from "./types.js";
+export { openDb, migrate, type Db } from "./db.js";
+export { MIGRATIONS } from "./schema.js";
+export { MorrelStore, MorrelError, gate, slugify, newId } from "./store.js";
+export type { CreateMemoryInput, UpdateMemoryInput, RecordRunInput, ListFilter } from "./store.js";
+export { KaneStreamParser, parseKaneOutput, type ParsedRun } from "./kane/parser.js";
+export { runKane, buildKaneArgs, type KaneRunOptions, type KaneRunOutcome } from "./kane/runner.js";
+export { runMock, buildMockStream, mockOutcomeFor } from "./kane/mock.js";
+export { verifyMemory, verifyAll, isMockEnv, defaultRunsDir, type VerifyOptions, type VerifyResult } from "./verify.js";
+export { findProjectRoot, resolveDbPath, runsDir } from "./paths.js";
+export { currentGitSha, gitRoot } from "./git.js";
