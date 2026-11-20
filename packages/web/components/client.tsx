@@ -41,10 +41,10 @@ export function Shortcuts({ filters = [] as string[] }: { filters?: string[] }) 
         const a = rows().find((r) => r.dataset.active === "true");
         const href = a?.dataset.href;
         if (href) router.push(href);
-      } else if (e.key === "Escape" && pathname !== "/") {
-        router.push("/");
+      } else if (e.key === "Escape" && pathname !== "/board") {
+        router.push("/board");
       } else if (g && e.key === "m") {
-        router.push("/");
+        router.push("/board");
       } else if (g && e.key === "r") {
         router.push("/runs");
       } else if (e.key === "g") {

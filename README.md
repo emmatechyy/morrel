@@ -128,7 +128,7 @@ pnpm install
 pnpm build            # core → cli → web
 pnpm test             # core unit tests (parser fixtures, store, verify orchestration)
 pnpm seed             # optional demo data (mock runs) into ./.morrel/morrel.db
-pnpm dev              # board on http://localhost:3100
+pnpm dev              # homepage on http://localhost:3100, board at /board
 ```
 
 For real verification: `npm i -g @testmuai/kane-cli && kane-cli login` (or export `LT_USERNAME` / `LT_ACCESS_KEY`).

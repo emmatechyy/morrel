@@ -1,280 +1,125 @@
 import Link from "next/link";
-import { Suspense } from "react";
-import { MEMORY_STATUSES, isMockEnv, type MemoryStatus } from "@morrel/core";
-import { dbPath, isDemo, withStore } from "@/lib/store";
-import { AutoRefresh, SearchBox, Shortcuts } from "@/components/client";
-import { Page, TopBar } from "@/components/shell";
-import { MockTag, RecoveredTag, ResultMark, StatusBadge, TrustMark } from "@/components/status";
-import { recoveryOf } from "@/lib/loop";
-import { Code, Kbd, Sha, Time } from "@/components/ui";
+import type { ReactNode } from "react";
+import { Logo } from "@/components/shell";
 
-export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Morrel — verified memory for coding agents",
+  description: "Morrel links every memory a coding agent keeps about your app to a Kane CLI flow, and only trusts it while the flow passes.",
+};
 
-const FILTERS: (MemoryStatus | "all")[] = ["all", "failed", "stale", "unverified", "verified", "retired"];
-const FILTER_LABEL: Record<string, string> = { all: "All", failed: "Failed", stale: "Stale", unverified: "Unverified", verified: "Verified", retired: "Retired" };
-const FILTER_DOT: Record<string, string> = { all: "", failed: "bg-bad", stale: "bg-warn", unverified: "border border-idle", verified: "bg-ok", retired: "bg-fg-4" };
+const REPO = "https://github.com/emmatechyy/morrel";
 
-export default async function Board({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
-  const sp = await searchParams;
-  const status = MEMORY_STATUSES.includes(sp.status as MemoryStatus) ? (sp.status as MemoryStatus) : undefined;
-  const q = sp.q?.trim() || undefined;
-
-  const data = withStore((s) => {
-    const rows = s.listGated({ status, search: q }).map((g) => ({ ...g, recovery: recoveryOf(s.listRuns({ memoryId: g.memory.id })) }));
-    const all = s.listGated({});
-    const allTrusted = all.filter((g) => g.trusted).length;
-    const recovered = all.filter((g) => g.trusted && recoveryOf(s.listRuns({ memoryId: g.memory.id }))).length;
-    return { rows, counts: s.counts(), allTrusted, recovered, lastRun: s.listRuns({ limit: 1 })[0] ?? null };
-  });
-  const { rows, counts } = data;
-  const trusted = rows.filter((r) => r.trusted).length;
-  const total = counts.total + counts.retired;
-  const empty = total === 0;
-  const href = (f: string) => {
-    const p = new URLSearchParams();
-    if (f !== "all") p.set("status", f);
-    if (q) p.set("q", q);
-    const s = p.toString();
-    return s ? `/?${s}` : "/";
-  };
-
+export default function Home() {
   return (
-    <>
-      <TopBar active="memories" dbPath={dbPath()} mock={isMockEnv()} demo={isDemo()} />
-      <Suspense>
-        <Shortcuts filters={FILTERS} />
-      </Suspense>
-      {!isDemo() && <AutoRefresh seconds={5} />}
-      <Page>
-        {/* Header */}
-        <section className="flex items-end justify-between gap-6 pb-5 pt-8">
-          <div>
-            <h1 className="text-[20px] font-semibold leading-7 tracking-[-0.01em]">Memories</h1>
-            <p className="mt-1 max-w-[620px] text-sm text-fg-3">
-              Claims about app behaviour, each linked to a Kane CLI flow. A memory reaches an agent as trusted only while
-              its latest flow run passes.
-            </p>
+    <div className="min-h-screen">
+      <header className="mx-auto flex h-14 max-w-[880px] items-center px-6">
+        <Link href="/" className="flex items-center gap-2 text-fg">
+          <Logo />
+          <span className="font-mono text-[13px] font-semibold tracking-tight">morrel</span>
+        </Link>
+        <nav className="ml-auto flex items-center gap-5 text-sm text-fg-3">
+          <a href={REPO} target="_blank" rel="noreferrer" className="hover:text-fg">GitHub</a>
+          <Link href="/board" className="text-fg hover:text-fg-2">Open the board</Link>
+        </nav>
+      </header>
+
+      <main className="mx-auto max-w-[880px] px-6">
+        {/* Intro */}
+        <section className="pb-20 pt-24 sm:pt-32">
+          <h1 className="max-w-[640px] text-[36px] font-semibold leading-[1.15] tracking-[-0.025em] sm:text-[44px]">
+            Memory your coding agent can actually trust.
+          </h1>
+          <p className="mt-5 max-w-[560px] text-base leading-[26px] text-fg-2">
+            Morrel keeps the notes an AI agent writes about how your app behaves, and checks each one against the real
+            app with a Kane CLI test. If the test stops passing, the agent stops believing the note.
+          </p>
+          <div className="mt-8 flex items-center gap-3">
+            <Link
+              href="/board"
+              className="inline-flex h-9 items-center rounded-md bg-fg px-4 text-sm font-medium text-bg transition-colors hover:bg-fg-2"
+            >
+              See the live board
+            </Link>
+            <a
+              href={REPO}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center rounded-md border border-line-strong px-4 text-sm text-fg-2 transition-colors hover:border-fg-4 hover:text-fg"
+            >
+              Read the code
+            </a>
           </div>
-          {!empty && (
-            <div className="flex shrink-0 items-center gap-6 pb-0.5">
-              <Stat label="Trusted" value={String(data.allTrusted)} sub={`of ${counts.total}`} title="Served to agents without a warning" tone={data.allTrusted ? "ok" : undefined} />
-              <Stat
-                label="Caught"
-                value={String(counts.failed + counts.stale)}
-                sub={`${counts.failed} failed · ${counts.stale} stale`}
-                tone={counts.failed ? "bad" : counts.stale ? "warn" : undefined}
-                title="Memories Morrel is withholding from agents: Kane failed the flow, or the code changed since the last pass"
-              />
-              {data.recovered > 0 && (
-                <Stat label="Recovered" value={String(data.recovered)} sub="fail → fix → pass" title="Kane caught a failure, the memory or app was fixed, and a real run passed again" />
-              )}
-              <Stat label="Last run" value={<Time iso={data.lastRun?.finishedAt} />} />
-            </div>
-          )}
         </section>
 
-        {empty ? (
-          <EmptyState />
-        ) : (
-          <>
-            {/* Toolbar */}
-            <div className="flex h-11 items-center justify-between gap-4 border-y border-line">
-              <nav className="-mb-px flex h-full items-center gap-1" aria-label="Filter by status">
-                {FILTERS.map((f, i) => {
-                  const n = f === "all" ? counts.total : counts[f];
-                  const on = (status ?? "all") === f;
-                  return (
-                    <Link
-                      key={f}
-                      href={href(f)}
-                      title={`Press ${i + 1}`}
-                      className={`flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors ${
-                        on ? "bg-raised text-fg ring-1 ring-line-strong" : "text-fg-3 hover:bg-panel hover:text-fg-2"
-                      }`}
-                    >
-                      {FILTER_DOT[f] && <span className={`size-1.5 rounded-full ${FILTER_DOT[f]}`} />}
-                      {FILTER_LABEL[f]}
-                      <span className={`tabular font-mono text-2xs ${on ? "text-fg-2" : "text-fg-4"}`}>{n}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-              <Suspense>
-                <SearchBox />
-              </Suspense>
-            </div>
+        <Row label="About">
+          <p>
+            Coding agents remember things between sessions: &ldquo;orders over $50 ship free&rdquo;, &ldquo;login lands on
+            the account page&rdquo;. Morrel is where those memories live. Each one is a plain sentence paired with a short
+            browser test that proves it.
+          </p>
+        </Row>
 
-            {/* Table */}
-            <div role="table" className="text-sm">
-              <div role="row" className="grid h-8 grid-cols-[112px_minmax(0,1fr)_92px_128px_84px_44px] items-center gap-4 border-b border-line px-3 text-2xs font-medium uppercase tracking-[0.06em] text-fg-4">
-                <span>Status</span>
-                <span>Memory</span>
-                <GateHeader />
-                <span>Last run</span>
-                <span>Commit</span>
-                <span className="text-right">Ver</span>
-              </div>
-              {rows.length === 0 && (
-                <div className="px-3 py-10 text-center text-sm text-fg-3">
-                  No memories match{q ? <> “{q}”</> : null}
-                  {status ? <> with status {FILTER_LABEL[status]?.toLowerCase()}</> : null}.
-                </div>
-              )}
-              {rows.map(({ memory: m, trusted, lastRun, recovery }) => (
-                <Link
-                  key={m.id}
-                  href={`/memories/${m.key}`}
-                  data-row
-                  data-href={`/memories/${m.key}`}
-                  role="row"
-                  className="grid min-h-[52px] grid-cols-[112px_minmax(0,1fr)_92px_128px_84px_44px] items-center gap-4 border-b border-line px-3 py-2 transition-colors hover:bg-panel"
-                >
-                  <span>
-                    <StatusBadge status={m.status} lastResult={lastRun?.result} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`block truncate text-sm ${m.status === "retired" ? "text-fg-3 line-through decoration-fg-4" : "text-fg"}`}>
-                      {m.claim}
-                    </span>
-                    <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-fg-3">
-                      <span className="shrink-0 font-mono text-fg-2">{m.key}</span>
-                      {recovery && trusted && <RecoveredTag />}
-                      <span className="text-fg-4">·</span>
-                      {(m.status === "failed" || m.status === "stale") && m.statusReason ? (
-                        <span className={`truncate ${m.status === "failed" ? "text-bad/80" : "text-warn/80"}`}>
-                          {m.statusReason.replace(/^Kane flow failed \(mock runner\): |^Kane flow failed: /, "Kane: ").replace(/^MOCK: /, "")}
-                        </span>
-                      ) : (
-                        <span className="truncate font-mono text-fg-4">{m.flow.file ?? m.flow.objective}</span>
-                      )}
-                    </span>
-                  </span>
-                  <span>
-                    <TrustMark trusted={trusted} mockOnly={m.status === "verified" && m.lastRunner === "mock"} />
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-fg-2">
-                    <ResultMark result={lastRun?.result ?? null} />
-                    <Time iso={lastRun?.finishedAt} />
-                    <MockTag runner={lastRun?.runner} />
-                  </span>
-                  <span>
-                    <Sha sha={m.gitSha ?? lastRun?.gitSha} />
-                  </span>
-                  <span className="tabular text-right font-mono text-xs text-fg-3">v{m.version}</span>
-                </Link>
-              ))}
-            </div>
+        <Row label="Problem">
+          <p>
+            Apps change, but memories don&rsquo;t. A rule that was true last week quietly becomes false, and the agent keeps
+            acting on it, writing code and tests on top of a fact nobody re-checked.
+          </p>
+        </Row>
 
-            <footer className="mt-4 flex items-start justify-between gap-6 text-2xs text-fg-4">
-              <GateLegend shown={rows.length} trusted={trusted} />
-              <span className="flex items-center gap-3">
-                <span className="flex items-center gap-1"><Kbd>j</Kbd><Kbd>k</Kbd> move</span>
-                <span className="flex items-center gap-1"><Kbd>↵</Kbd> open</span>
-                <span className="flex items-center gap-1"><Kbd>1</Kbd>–<Kbd>6</Kbd> filter</span>
-                <span className="flex items-center gap-1"><Kbd>/</Kbd> search</span>
-              </span>
-            </footer>
-          </>
-        )}
-      </Page>
-    </>
-  );
-}
+        <Row label="Solution">
+          <p>
+            Morrel runs every memory&rsquo;s test with Kane CLI and only serves it as trusted while that test passes. When
+            one fails, the agent is warned before it reads it, rewrites the memory, and Morrel tests it again.
+          </p>
+          <Example />
+        </Row>
+      </main>
 
-const GATE_LEGEND: [React.ReactNode, string][] = [
-  [<TrustMark key="t" trusted />, "latest real Kane run of the current version passed"],
-  [<TrustMark key="g" trusted={false} />, "agents get an UNTRUSTED warning (failed, stale or never verified)"],
-  [<TrustMark key="m" trusted={false} mockOnly />, "passed only on the mock runner; not trusted"],
-];
-
-function GateHeader() {
-  return (
-    <span tabIndex={0} className="group relative inline-flex w-fit cursor-help items-center gap-1 outline-none">
-      Gate
-      <svg viewBox="0 0 16 16" className="size-3 text-fg-4 group-hover:text-fg-2 group-focus:text-fg-2" aria-hidden>
-        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M6.6 6.3a1.5 1.5 0 1 1 2.1 1.4c-.5.2-.7.6-.7 1.1M8 10.9v.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-      <span
-        role="tooltip"
-        className="invisible absolute left-0 top-6 z-30 w-[300px] rounded-md border border-line-strong bg-raised p-3 text-xs normal-case tracking-normal text-fg-2 opacity-0 shadow-[0_8px_24px_rgba(0,0,0,.45)] transition-opacity group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100"
-      >
-        <span className="mb-2 block font-medium text-fg">What an agent gets from <code className="font-mono">morrel get</code></span>
-        {GATE_LEGEND.map(([mark, text], i) => (
-          <span key={i} className="mt-1.5 grid grid-cols-[84px_minmax(0,1fr)] items-start gap-2 font-normal">
-            <span>{mark}</span>
-            <span className="leading-[18px] text-fg-3">{text}</span>
-          </span>
-        ))}
-      </span>
-    </span>
-  );
-}
-
-function GateLegend({ shown, trusted }: { shown: number; trusted: number }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-      <span className="tabular">
-        {shown} shown · {trusted} trusted
-      </span>
-      <span className="text-fg-4">Gate:</span>
-      <span><span className="text-ok">Trusted</span> latest real Kane run passed</span>
-      <span><span className="text-fg-3">Gated</span> agents get an UNTRUSTED warning</span>
-      <span><span className="text-fg-3">Mock only</span> mock pass, not trusted</span>
+      <footer className="mx-auto mt-24 max-w-[880px] px-6 text-sm text-fg-3">
+        <p className="border-t border-line py-8">
+        Built by Sniper for the{" "}
+        <span className="text-fg-2">KaneCLI Hackathon</span> by{" "}
+        <a href="https://www.testmuai.com" target="_blank" rel="noreferrer" className="text-fg-2 hover:text-fg">TestMu AI</a>.
+        </p>
+      </footer>
     </div>
   );
 }
 
-function Stat({ label, value, sub, tone, title }: { label: string; value: React.ReactNode; sub?: string; tone?: "ok" | "bad" | "warn"; title?: string }) {
-  const c = tone === "ok" ? "text-ok" : tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-fg";
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div title={title} className="min-w-[92px] border-l border-line pl-4">
-      <div className="text-2xs uppercase tracking-[0.06em] text-fg-4">{label}</div>
-      <div className="mt-1 flex items-baseline gap-1.5">
-        <span className={`tabular text-[18px] font-semibold leading-6 ${c}`}>{value}</span>
-        {sub && <span className="text-2xs text-fg-4">{sub}</span>}
-      </div>
-    </div>
+    <section className="grid gap-3 border-t border-line py-10 sm:grid-cols-[160px_1fr] sm:gap-10">
+      <h2 className="text-sm font-medium text-fg-3">{label}</h2>
+      <div className="max-w-[600px] space-y-6 text-base leading-[26px] text-fg">{children}</div>
+    </section>
   );
 }
 
-function EmptyState() {
-  const steps: [string, string][] = [
-    ["Initialise the store", "morrel init"],
-    ["Record a claim with the Kane flow that proves it", 'morrel add "Login redirects to /dashboard" \\\n  --flow "Log in as demo@acme.dev, then verify the URL is /dashboard" \\\n  --url http://localhost:3000'],
-    ["Run Kane and gate the memory on the result", "morrel verify --all"],
-    ["Re-verify on every commit", "morrel install-hook"],
+/** The real checkout-free-shipping history from the demo, in three lines. */
+function Example() {
+  const steps: { dot: string; title: string; note: string }[] = [
+    { dot: "bg-ok", title: "Orders over $50 ship free", note: "Kane run passed" },
+    { dot: "bg-bad", title: "Shop raised the threshold to $75", note: "Kane run failed: expected Free, found $6.95" },
+    { dot: "bg-ok", title: "Free shipping starts at $75", note: "Memory rewritten, Kane run passed again" },
   ];
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-10 border-t border-line pt-8">
-      <ol className="space-y-6">
-        {steps.map(([title, cmd], i) => (
-          <li key={i} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
-            <span className="flex size-6 items-center justify-center rounded-full border border-line-strong font-mono text-2xs text-fg-2">{i + 1}</span>
-            <div>
-              <div className="text-sm text-fg">{title}</div>
-              <pre className="mt-2 overflow-x-auto rounded-md border border-line bg-panel px-3 py-2.5 font-mono text-xs leading-5 text-fg-2">
-                <span className="select-none text-fg-4">$ </span>
-                {cmd}
-              </pre>
+    <div className="rounded-lg border border-line bg-panel">
+      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <span className="font-mono text-xs text-fg-2">checkout-free-shipping</span>
+        <Link href="/memories/checkout-free-shipping" className="text-xs text-fg-3 hover:text-fg">See the real runs</Link>
+      </div>
+      <ol className="px-4 py-3">
+        {steps.map((s, i) => (
+          <li key={i} className="relative flex gap-3 py-2">
+            {i < steps.length - 1 && <span className="absolute left-[3px] top-[18px] h-[calc(100%-6px)] w-px bg-line-strong" aria-hidden />}
+            <span className={`mt-[7px] size-[7px] shrink-0 rounded-full ${s.dot}`} aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm text-fg">{s.title}</p>
+              <p className="text-xs text-fg-3">{s.note}</p>
             </div>
           </li>
         ))}
       </ol>
-      <aside className="text-sm text-fg-3">
-        <div className="text-2xs font-medium uppercase tracking-[0.08em] text-fg-3">No memories yet</div>
-        <p className="mt-3">
-          Morrel stores what your coding agent believes about the app, and refuses to vouch for it unless a Kane CLI run
-          proves it on the current code.
-        </p>
-        <p className="mt-3">
-          Agents read through the gate: <Code>morrel get &lt;key&gt; --json --strict</Code> exits non-zero for failed,
-          stale or unverified memories.
-        </p>
-        <p className="mt-3">
-          Want sample data? <Code>pnpm seed</Code>
-        </p>
-      </aside>
     </div>
   );
 }

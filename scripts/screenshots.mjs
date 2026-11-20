@@ -11,8 +11,8 @@ const browser = await chromium.launch({ executablePath, headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 
 const shots = [
-  ["board", "/"],
-  ["board-failed", "/?status=failed"],
+  ["board", "/board"],
+  ["board-failed", "/board?status=failed"],
   ["detail-failed", "/memories/checkout-save10-discount"],
   ["detail-verified", "/memories/auth-login-redirect"],
   ["detail-stale-rewritten", "/memories/pricing-annual-discount"],
@@ -35,7 +35,7 @@ if (process.env.EMPTY_URL) {
 if (process.env.REAL_URL) {
   // Board pointed at the real-Kane database (MORREL_DB=.morrel/real/morrel.db).
   for (const [name, path, full] of [
-    ["real-board", "/", false],
+    ["real-board", "/board", false],
     ["real-detail-trusted", "/memories/example-heading", true],
     ["real-detail-stale-heading-run", null, true],
     ["real-detail-failed", "/memories/example-hello-world", true],
@@ -56,7 +56,7 @@ if (process.env.DEMO_URL) {
   // Board over real Kane runs against the Acme Shop demo app (live demo, or a local server on .morrel/shop/morrel.db).
   const D = process.env.DEMO_URL;
   for (const [name, path, full] of [
-    ["demo-board", "/", false],
+    ["demo-board", "/board", false],
     ["demo-detail-loop", "/memories/checkout-free-shipping", true],
     ["demo-detail-caught", "/memories/checkout-save10-discount", true],
   ]) {
@@ -66,7 +66,7 @@ if (process.env.DEMO_URL) {
     await page.screenshot({ path: `${out}${name}.png`, fullPage: full });
     console.log(`${out}${name}.png`);
   }
-  await page.goto(D + "/", { waitUntil: "load" });
+  await page.goto(D + "/board", { waitUntil: "load" });
   await page.hover('[role=row] [role=tooltip] >> xpath=..');
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${out}demo-gate-legend.png`, clip: { x: 0, y: 120, width: 1440, height: 420 } });

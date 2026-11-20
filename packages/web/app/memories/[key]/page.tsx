@@ -36,7 +36,7 @@ export default async function MemoryPage({ params, searchParams }: { params: Pro
       <Page>
         {/* Breadcrumb */}
         <div className="flex h-11 items-center gap-2 text-sm text-fg-3">
-          <Link href="/" className="hover:text-fg">Memories</Link>
+          <Link href="/board" className="hover:text-fg">Memories</Link>
           <span className="text-fg-4">/</span>
           <span className="font-mono text-fg-2">{m.key}</span>
           <span className="ml-auto flex items-center gap-1.5 text-2xs text-fg-4">

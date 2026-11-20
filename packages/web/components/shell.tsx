@@ -26,7 +26,7 @@ export function TopBar({ active, dbPath, mock, demo = false }: { active: "memori
         </Link>
         <span className="h-4 w-px bg-line-strong" />
         <nav className="flex items-center gap-5">
-          {tab("/", "Memories", "m", active === "memories")}
+          {tab("/board", "Memories", "m", active === "memories")}
           {tab("/runs", "Runs", "r", active === "runs")}
         </nav>
         <div className="ml-auto flex min-w-0 items-center gap-3 text-2xs text-fg-3">
@@ -36,7 +36,7 @@ export function TopBar({ active, dbPath, mock, demo = false }: { active: "memori
             </span>
           )}
           {demo ? (
-            <span className="flex items-center gap-2" title="Static snapshot: mock seed data plus real Kane CLI runs against example.com. Nothing here re-runs.">
+            <span className="flex items-center gap-2" title="Static snapshot of real Kane CLI runs against the demo shop. Nothing here re-runs.">
               <span className="size-1.5 rounded-full border border-fg-3" aria-hidden />
               <span>Read-only demo.</span>
               <span className="hidden text-fg-4 md:inline">
@@ -55,7 +55,7 @@ export function TopBar({ active, dbPath, mock, demo = false }: { active: "memori
   );
 }
 
-function Logo() {
+export function Logo() {
   // A gate: two posts and a lintel. Memories pass only when the flow holds.
   return (
     <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
