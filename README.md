@@ -1,5 +1,9 @@
 # Morrel
 
+[![Watch the 90-second Morrel demo](docs/video/demo-thumbnail.png)](https://morrel.vercel.app/video/morrel-demo-90s.mp4)
+
+**[Watch the 90-second demo](https://morrel.vercel.app/video/morrel-demo-90s.mp4)** · [3-minute explainer](https://morrel.vercel.app/video/morrel-explainer-3min.mp4) · [Live site](https://morrel.vercel.app) · [Board](https://morrel.vercel.app/board)
+
 **A memory store for coding agents where a memory is trusted only while its Kane CLI flow passes.**
 
 **Live demo (read-only): https://morrel.vercel.app**. Every row on it is a real Kane CLI run against a small demo app, **Acme Shop** (https://morrel-demo-shop.vercel.app, source in [`examples/acme-shop`](examples/acme-shop)). There is no mock data in the public demo.

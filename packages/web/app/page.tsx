@@ -8,8 +8,9 @@ export const metadata = {
 };
 
 const REPO = "https://github.com/emmatechyy/morrel";
-/** Set once the demo video is published; the hero link only renders when it exists. */
-const VIDEO_URL: string | null = null;
+const VIDEO = "/video/morrel-demo-90s.mp4";
+const VIDEO_POSTER = "/video/morrel-demo-90s.png";
+const EXPLAINER = "/video/morrel-explainer-3min.mp4";
 
 export default function Home() {
   return (
@@ -50,12 +51,26 @@ export default function Home() {
             >
               Read the code
             </a>
-            {VIDEO_URL && (
-              <a href={VIDEO_URL} target="_blank" rel="noreferrer" className="ml-2 text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
-                Watch the 90-second demo
-              </a>
-            )}
+            <a href="#demo" className="ml-2 text-sm text-fg-2 underline-offset-4 hover:text-fg hover:underline">
+              Watch the 90-second demo
+            </a>
           </div>
+        </section>
+
+        <section id="demo" className="scroll-mt-6 pb-20">
+          <video
+            src={VIDEO}
+            poster={VIDEO_POSTER}
+            controls
+            preload="none"
+            playsInline
+            className="aspect-video w-full rounded-lg border border-line bg-panel"
+          />
+          <p className="mt-3 text-xs text-fg-3">
+            90 seconds: a commit changes the shop, Kane fails the memory (expected Free, found $6.95), the agent rewrites
+            it, and it passes again. New to Morrel?{" "}
+            <a href={EXPLAINER} className="text-fg-2 underline-offset-4 hover:text-fg hover:underline">Watch the 3-minute explainer</a>.
+          </p>
         </section>
 
         <Row label="About">
